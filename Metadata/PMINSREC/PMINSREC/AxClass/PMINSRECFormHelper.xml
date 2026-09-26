@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECFormHelper</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// UI helpers shared by the action menu items of the insurance card reconciliation.
+/// </summary>
+public final class PMINSRECFormHelper
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>refreshCaller</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Re-reads the main data source of the calling form after an action has changed data.
+    /// </summary>
+    public static void refreshCaller(Args _args)
+    {
+        FormRun        formRun;
+        FormDataSource formDataSource;
+
+        if (_args && _args.caller() is FormRun)
+        {
+            formRun        = _args.caller();
+            formDataSource = formRun.dataSource(1);
+
+            if (formDataSource)
+            {
+                formDataSource.research(true);
+            }
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>uploadFile</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Asks the user for a file. Returns null when the upload is cancelled or fails.
+    /// </summary>
+    public static FileUploadTemporaryStorageResult uploadFile()
+    {
+        FileUploadTemporaryStorageResult result = File::GetFileFromUser() as FileUploadTemporaryStorageResult;
+
+        if (!result || !result.getUploadStatus())
+        {
+            return null;
+        }
+
+        return result;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

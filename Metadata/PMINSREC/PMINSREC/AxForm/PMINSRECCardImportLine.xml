@@ -1,0 +1,251 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECCardImportLine</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECCardImportLine extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECCardImportLine</Name>
+			<Table>PMINSRECCardImportLine</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>CardBank</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RequestId</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DebitCredit</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>Amount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransDate</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransTime</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransDateText</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ProposalReceiptDate</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransactionId</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>BankTransactionId</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InsuranceCompany</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PolicyNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CustomerName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RegistrationNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>OutletCode</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransTypeText</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>Description</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RefundInitiated</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FileName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ImportLogRecId</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<AllowEdit>No</AllowEdit>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:CardFileLines</Caption>
+		<DataSource xmlns="">PMINSRECCardImportLine</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_CardBank</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardBank</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RequestId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RequestId</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_DebitCredit</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DebitCredit</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_Amount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Amount</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormDateControl">
+						<Name>Grid_TransDate</Name>
+						<Type>Date</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransDate</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormTimeControl">
+						<Name>Grid_TransTime</Name>
+						<Type>Time</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransTime</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_TransDateText</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransDateText</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ProposalReceiptDate</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ProposalReceiptDate</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_TransactionId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransactionId</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_BankTransactionId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>BankTransactionId</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_InsuranceCompany</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InsuranceCompany</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PolicyNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PolicyNo</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_CustomerName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CustomerName</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RegistrationNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RegistrationNo</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_OutletCode</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutletCode</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_TransTypeText</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransTypeText</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_Description</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Description</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RefundInitiated</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RefundInitiated</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FileName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FileName</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormInt64Control">
+						<Name>Grid_ImportLogRecId</Name>
+						<Type>Int64</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ImportLogRecId</DataField>
+						<DataSource>PMINSRECCardImportLine</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECCardImportLine</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

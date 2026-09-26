@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxMenu xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECInsuranceRecon</Name>
+	<Label>@PMINSREC:InsuranceCardReconciliation</Label>
+	<Elements>
+		<AxMenuElement i:type="AxMenuElementSubMenu">
+			<Name>Operations</Name>
+			<Label>@PMINSREC:Operations</Label>
+			<Elements>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECCardSettlement</Name>
+					<MenuItemName>PMINSRECCardSettlement</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECIndividualReport</Name>
+					<MenuItemName>PMINSRECIndividualReport</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECCardImport</Name>
+					<MenuItemType>Action</MenuItemType>
+					<MenuItemName>PMINSRECCardImport</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECIndividualReportImport</Name>
+					<MenuItemType>Action</MenuItemType>
+					<MenuItemName>PMINSRECIndividualReportImport</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECProcess</Name>
+					<MenuItemType>Action</MenuItemType>
+					<MenuItemName>PMINSRECProcess</MenuItemName>
+				</AxMenuElement>
+			</Elements>
+		</AxMenuElement>
+		<AxMenuElement i:type="AxMenuElementSubMenu">
+			<Name>Inquiries</Name>
+			<Label>@PMINSREC:InquiriesAndReports</Label>
+			<Elements>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECCardImportLine</Name>
+					<MenuItemName>PMINSRECCardImportLine</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECImportLog</Name>
+					<MenuItemName>PMINSRECImportLog</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECSummaryReport</Name>
+					<MenuItemType>Action</MenuItemType>
+					<MenuItemName>PMINSRECSummaryReport</MenuItemName>
+				</AxMenuElement>
+			</Elements>
+		</AxMenuElement>
+		<AxMenuElement i:type="AxMenuElementSubMenu">
+			<Name>Setup</Name>
+			<Label>@PMINSREC:Setup</Label>
+			<Elements>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECParameters</Name>
+					<MenuItemName>PMINSRECParameters</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECOutletSite</Name>
+					<MenuItemName>PMINSRECOutletSite</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECPostingSetup</Name>
+					<MenuItemName>PMINSRECPostingSetup</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECFileFormat</Name>
+					<MenuItemName>PMINSRECFileFormat</MenuItemName>
+				</AxMenuElement>
+				<AxMenuElement i:type="AxMenuElementMenuItem">
+					<Name>PMINSRECCustChassis</Name>
+					<MenuItemName>PMINSRECCustChassis</MenuItemName>
+				</AxMenuElement>
+			</Elements>
+		</AxMenuElement>
+	</Elements>
+</AxMenu>

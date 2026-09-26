@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECParameters</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Parameters for the insurance card settlement reconciliation.
+/// </summary>
+public class PMINSRECParameters extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>find</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Finds the parameter record of the current company, creating it when missing.
+    /// </summary>
+    public static PMINSRECParameters find(boolean _forupdate = false)
+    {
+        PMINSRECParameters parameters;
+
+        parameters.selectForUpdate(_forupdate);
+
+        select firstonly parameters
+            where parameters.Key == 0;
+
+        if (!parameters && !parameters.isTmp())
+        {
+            Company::createParameter(parameters);
+        }
+
+        return parameters;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>initValue</Name>
+				<Source><![CDATA[
+    public void initValue()
+    {
+        super();
+
+        this.NewCarCustGroup = 'C000001';
+        this.AutoPostSettle  = NoYes::Yes;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:InsuranceCardSettlementParameters</Label>
+	<CacheLookup>Found</CacheLookup>
+	<ClusteredIndex>KeyIdx</ClusteredIndex>
+	<PrimaryIndex>KeyIdx</PrimaryIndex>
+	<ReplacementKey>KeyIdx</ReplacementKey>
+	<TableGroup>Parameter</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>General</Name>
+			<Label>@PMINSREC:General</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>AutoPostSettle</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>NewCarCustGroup</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>MaxDifferenceAmount</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldInt">
+			<Name>Key</Name>
+			<AllowEdit>No</AllowEdit>
+			<AllowEditOnCreate>No</AllowEditOnCreate>
+			<ExtendedDataType>ParametersKey</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>AutoPostSettle</Name>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:AutoPostAndSettle</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>NewCarCustGroup</Name>
+			<ExtendedDataType>CustGroupId</ExtendedDataType>
+			<Label>@PMINSREC:NewCarCustomerGroup</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>MaxDifferenceAmount</Name>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:MaximumDifferenceAmount0NoLimit</Label>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>KeyIdx</Name>
+			<AlternateKey>Yes</AlternateKey>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>Key</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+		<AxTableRelation>
+			<Name>CustGroup</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>CustGroup</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>NewCarCustGroup</Name>
+					<Field>NewCarCustGroup</Field>
+					<RelatedField>CustGroup</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+	</Relations>
+	<StateMachines />
+</AxTable>

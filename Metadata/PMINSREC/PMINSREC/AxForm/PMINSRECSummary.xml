@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECSummary</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECSummary extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>init</Name>
+				<Source><![CDATA[
+    public void init()
+    {
+        super();
+
+        if (element.args() && element.args().record() && element.args().record().TableId == tableNum(PMINSRECSummaryTmp))
+        {
+            PMINSRECSummaryTmp.linkPhysicalTableInstance(element.args().record());
+        }
+
+        if (element.args() && element.args().parm())
+        {
+            element.design().caption(element.args().parm());
+        }
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECSummaryTmp</Name>
+			<Table>PMINSRECSummaryTmp</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>GroupValue</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>LineCount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CardAmount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ReceivedAmount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DiscountAmount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>OutstandingCount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>OutstandingAmount</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<AllowEdit>No</AllowEdit>
+			<AllowDelete>No</AllowDelete>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:OutstandingAndDiscountReport</Caption>
+		<DataSource xmlns="">PMINSRECSummaryTmp</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_GroupValue</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>GroupValue</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_LineCount</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>LineCount</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_CardAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardAmount</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_ReceivedAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ReceivedAmount</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_DiscountAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DiscountAmount</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_OutstandingCount</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutstandingCount</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_OutstandingAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutstandingAmount</DataField>
+						<DataSource>PMINSRECSummaryTmp</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECSummaryTmp</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

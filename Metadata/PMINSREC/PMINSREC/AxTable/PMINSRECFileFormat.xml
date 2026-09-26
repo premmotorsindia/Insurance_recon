@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECFileFormat</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Excel column name per card bank and card file field (grid-to-Excel mapping).
+/// </summary>
+public class PMINSRECFileFormat extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>columnMap</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Returns a map PMINSRECCardField -> Excel column name for the given card bank.
+    /// </summary>
+    public static Map columnMap(PMINSRECCardBank _cardBank)
+    {
+        Map                columns = new Map(Types::Enum, Types::String);
+        PMINSRECFileFormat format;
+
+        while select format
+            where format.CardBank == _cardBank
+        {
+            columns.insert(format.CardField, format.ColumnName);
+        }
+
+        return columns;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:CardFileColumnMapping</Label>
+	<TitleField1>CardBank</TitleField1>
+	<TitleField2>CardField</TitleField2>
+	<ClusteredIndex>FormatIdx</ClusteredIndex>
+	<PrimaryIndex>FormatIdx</PrimaryIndex>
+	<ReplacementKey>FormatIdx</ReplacementKey>
+	<TableGroup>Group</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>CardBank</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CardField</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ColumnName</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>CardBank</Name>
+			<EnumType>PMINSRECCardBank</EnumType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>CardField</Name>
+			<EnumType>PMINSRECCardField</EnumType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ColumnName</Name>
+			<ExtendedDataType>PMINSRECColumnName</ExtendedDataType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>FormatIdx</Name>
+			<AlternateKey>Yes</AlternateKey>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>CardBank</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>CardField</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+	</Relations>
+	<StateMachines />
+</AxTable>

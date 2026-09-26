@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECSummaryReport</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Outstanding and given discount report, grouped by dealer executive (TC), card bank, site or insurance company.
+/// <para>Outstanding: JV1 done, JV2 not yet done (receipt not available / customer not found).</para>
+/// <para>Given discount: difference (card amount - insurance received amount) of renewal lines with JV2.</para>
+/// </summary>
+public final class PMINSRECSummaryReport
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    public static void main(Args _args)
+    {
+        Dialog                dialog = new Dialog("Outstanding / discount report");
+        DialogField           fromDateField, toDateField, groupByField, cardBankField, allCardsField;
+        PMINSRECSummaryTmp    summaryTmp;
+        Args                  formArgs = new Args();
+        PMINSRECCardBank      cardBank;
+        boolean               allCards;
+
+        fromDateField = dialog.addFieldValue(extendedTypeStr(TransDate), dateStartMth(systemDateGet()), "From date");
+        toDateField   = dialog.addFieldValue(extendedTypeStr(TransDate), systemDateGet(), "To date");
+        groupByField  = dialog.addFieldValue(enumStr(PMINSRECReportGroupBy), PMINSRECReportGroupBy::DlrExecutive, "Group by");
+        allCardsField = dialog.addFieldValue(extendedTypeStr(NoYesId), NoYes::Yes, "All card banks");
+        cardBankField = dialog.addField(enumStr(PMINSRECCardBank), "Card bank");
+
+        if (!dialog.run())
+        {
+            return;
+        }
+
+        cardBank = cardBankField.value();
+        allCards = allCardsField.value();
+
+        summaryTmp = PMINSRECSummaryReport::build(fromDateField.value(), toDateField.value(), groupByField.value(),
+            allCards, cardBank);
+
+        formArgs.record(summaryTmp);
+        formArgs.parm(strFmt("Outstanding / discount by %1, %2 - %3%4", groupByField.value(),
+            fromDateField.value(), toDateField.value(), allCards ? '' : strFmt(', %1', cardBank)));
+
+        new MenuFunction(menuItemDisplayStr(PMINSRECSummary), MenuItemType::Display).run(formArgs);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>build</Name>
+				<Source><![CDATA[
+    public static PMINSRECSummaryTmp build(
+        TransDate             _fromDate,
+        TransDate             _toDate,
+        PMINSRECReportGroupBy _groupBy,
+        boolean               _allCards = true,
+        PMINSRECCardBank      _cardBank = PMINSRECCardBank::ICICI)
+    {
+        PMINSRECSummaryTmp     summaryTmp;
+        PMINSRECCardSettlement settlement;
+        Map                    totals = new Map(Types::String, Types::Container);
+        MapEnumerator          enumerator;
+        str                    groupValue;
+        container              values;
+        int                    lineCount, outstandingCount;
+        AmountMST              cardAmount, receivedAmount, discountAmount, outstandingAmount;
+        boolean                outstanding;
+
+        while select settlement
+            where settlement.TransDate >= _fromDate
+               && (_toDate == dateNull() || settlement.TransDate <= _toDate)
+               && settlement.Status    != PMINSRECStatus::NetZeroSkipped
+               && (_allCards || settlement.CardBank == _cardBank)
+        {
+            groupValue = PMINSRECSummaryReport::groupValue(settlement, _groupBy);
+
+            values = totals.exists(groupValue) ? totals.lookup(groupValue) : [0, 0.0, 0.0, 0.0, 0, 0.0];
+            [lineCount, cardAmount, receivedAmount, discountAmount, outstandingCount, outstandingAmount] = values;
+
+            outstanding = settlement.JV1JournalNum && !settlement.JV2JournalNum;
+
+            lineCount++;
+            cardAmount     += settlement.CardAmount;
+            receivedAmount += settlement.InsuranceReceivedAmount;
+
+            if (settlement.JV2JournalNum)
+            {
+                discountAmount += settlement.DifferenceAmount;
+            }
+
+            if (outstanding)
+            {
+                outstandingCount++;
+                outstandingAmount += settlement.CardAmount;
+            }
+
+            totals.insert(groupValue,
+                [lineCount, cardAmount, receivedAmount, discountAmount, outstandingCount, outstandingAmount]);
+        }
+
+        enumerator = totals.getEnumerator();
+
+        while (enumerator.moveNext())
+        {
+            [lineCount, cardAmount, receivedAmount, discountAmount, outstandingCount, outstandingAmount] = enumerator.currentValue();
+
+            summaryTmp.clear();
+            summaryTmp.GroupValue        = enumerator.currentKey();
+            summaryTmp.LineCount         = lineCount;
+            summaryTmp.CardAmount        = cardAmount;
+            summaryTmp.ReceivedAmount    = receivedAmount;
+            summaryTmp.DiscountAmount    = discountAmount;
+            summaryTmp.OutstandingCount  = outstandingCount;
+            summaryTmp.OutstandingAmount = outstandingAmount;
+            summaryTmp.insert();
+        }
+
+        return summaryTmp;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>groupValue</Name>
+				<Source><![CDATA[
+    private static str groupValue(PMINSRECCardSettlement _settlement, PMINSRECReportGroupBy _groupBy)
+    {
+        str value;
+
+        switch (_groupBy)
+        {
+            case PMINSRECReportGroupBy::DlrExecutive:
+                value = _settlement.DlrExecutive;
+                break;
+
+            case PMINSRECReportGroupBy::CardBank:
+                value = enum2Str(_settlement.CardBank);
+                break;
+
+            case PMINSRECReportGroupBy::Site:
+                value = _settlement.InventSiteId;
+                break;
+
+            case PMINSRECReportGroupBy::InsuranceCompany:
+                value = _settlement.ICName ? _settlement.ICName : _settlement.InsuranceCompany;
+                break;
+        }
+
+        return value ? strLRTrim(value) : '(blank)';
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

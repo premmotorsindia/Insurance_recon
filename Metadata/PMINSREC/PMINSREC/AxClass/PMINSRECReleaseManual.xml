@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECReleaseManual</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Releases the selected lines with status Manual (endorsement, difference above the limit,
+/// new card lines after JV1) so that the next processing posts them.
+/// </summary>
+public final class PMINSRECReleaseManual
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    public static void main(Args _args)
+    {
+        MultiSelectionHelper   selectionHelper = MultiSelectionHelper::construct();
+        PMINSRECCardSettlement selected, settlement;
+        int                    released;
+
+        if (!_args || !_args.record() || _args.record().TableId != tableNum(PMINSRECCardSettlement))
+        {
+            throw error("Select the grid lines to release.");
+        }
+
+        selectionHelper.parmDatasource(FormDataUtil::getFormDataSource(_args.record()));
+
+        if (Box::yesNo("Release the selected manual lines for posting?", DialogButton::No) != DialogButton::Yes)
+        {
+            return;
+        }
+
+        ttsbegin;
+
+        selected = selectionHelper.getFirst();
+
+        while (selected)
+        {
+            settlement = PMINSRECCardSettlement::findRecId(selected.RecId, true);
+
+            if (settlement.Status == PMINSRECStatus::Manual && settlement.CardAmount > 0)
+            {
+                settlement.ManualReleased = NoYes::Yes;
+                settlement.ErrorText      = strFmt("Released by %1.", curUserId());
+
+                if (settlement.JV2JournalNum)
+                {
+                    settlement.Status = PMINSRECStatus::JV2Created;
+                }
+                else if (settlement.JV1Posted)
+                {
+                    settlement.Status = PMINSRECStatus::JV1Posted;
+                }
+                else if (settlement.JV1JournalNum)
+                {
+                    settlement.Status = PMINSRECStatus::JV1Created;
+                }
+                else
+                {
+                    settlement.Status = PMINSRECStatus::Draft;
+                }
+
+                settlement.update();
+                released++;
+            }
+
+            selected = selectionHelper.getNext();
+        }
+
+        ttscommit;
+
+        info(strFmt("%1 lines released.", released));
+
+        if (released)
+        {
+            PMINSRECProcessEngine::construct().run();
+        }
+
+        PMINSRECFormHelper::refreshCaller(_args);
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

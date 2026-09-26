@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECSummaryTmp</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+public class PMINSRECSummaryTmp extends common
+{
+}
+
+]]></Declaration>
+		<Methods />
+	</SourceCode>
+	<Label>@PMINSREC:CardSettlementSummary</Label>
+	<TableGroup>Main</TableGroup>
+	<TableType>TempDB</TableType>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>GroupValue</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>LineCount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CardAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ReceivedAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DiscountAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>OutstandingCount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>OutstandingAmount</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>GroupValue</Name>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:Group</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldInt">
+			<Name>LineCount</Name>
+			<ExtendedDataType>Counter</ExtendedDataType>
+			<Label>@PMINSREC:Requests</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>CardAmount</Name>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:CardAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>ReceivedAmount</Name>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:InsuranceReceivedAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>DiscountAmount</Name>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:GivenDiscountDifference</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldInt">
+			<Name>OutstandingCount</Name>
+			<ExtendedDataType>Counter</ExtendedDataType>
+			<Label>@PMINSREC:OutstandingRequests</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>OutstandingAmount</Name>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:OutstandingAmount</Label>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>GroupIdx</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>GroupValue</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+	</Relations>
+	<StateMachines />
+</AxTable>

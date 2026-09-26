@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECIndividualReportImport</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Uploads the insurance portal individual report (new car or renewal .csv / .xlsx).
+/// All columns are captured; the report supplies the TC name (DLR_EXECUTIVE), IC name,
+/// registration number and, for new cars, the chassis number of the card lines.
+/// </summary>
+public final class PMINSRECIndividualReportImport
+{
+    PMINSRECInsuranceType reportType;
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    public static void main(Args _args)
+    {
+        Dialog                           dialog = new Dialog("Upload individual report");
+        DialogField                      reportTypeField;
+        FileUploadTemporaryStorageResult uploadResult;
+        PMINSRECIndividualReportImport   import;
+
+        reportTypeField = dialog.addField(enumStr(PMINSRECInsuranceType), "Report type");
+        reportTypeField.value(PMINSRECInsuranceType::Renewal);
+
+        if (!dialog.run())
+        {
+            return;
+        }
+
+        if (reportTypeField.value() == PMINSRECInsuranceType::None)
+        {
+            throw error("Select report type New car or Renewal.");
+        }
+
+        uploadResult = PMINSRECFormHelper::uploadFile();
+
+        if (uploadResult)
+        {
+            import = new PMINSRECIndividualReportImport();
+            import.parmReportType(reportTypeField.value());
+
+            using (System.IO.Stream stream = uploadResult.openResult())
+            {
+                import.importFile(stream, uploadResult.getFileName());
+            }
+
+            // enrichment can make pending lines matchable
+            PMINSRECProcessEngine::construct().run();
+        }
+
+        PMINSRECFormHelper::refreshCaller(_args);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parmReportType</Name>
+				<Source><![CDATA[
+    public PMINSRECInsuranceType parmReportType(PMINSRECInsuranceType _reportType = reportType)
+    {
+        reportType = _reportType;
+        return reportType;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>importFile</Name>
+				<Source><![CDATA[
+    public void importFile(System.IO.Stream _stream, Filename _fileName)
+    {
+        List                     rows = PMINSRECFileReader::readRows(_stream, _fileName);
+        ListEnumerator           rowEnumerator = rows.getEnumerator();
+        Map                      row;
+        PMINSRECIndividualReport report;
+        PMINSRECRequestId        proposalNo;
+        PMINSRECImportLog        importLog;
+        PMINSRECCardSettlement   settlement;
+
+        ttsbegin;
+
+        importLog.ImportType = PMINSRECImportType::IndividualReport;
+        importLog.ReportType = reportType;
+        importLog.FileName   = _fileName;
+        importLog.insert();
+
+        while (rowEnumerator.moveNext())
+        {
+            row = rowEnumerator.current();
+            importLog.RowsRead++;
+
+            proposalNo = PMINSRECFileReader::value(row, 'PROPOSALNO');
+
+            if (!proposalNo)
+            {
+                importLog.RowsSkipped++;
+                continue;
+            }
+
+            report = PMINSRECIndividualReport::find(proposalNo, true);
+
+            if (report)
+            {
+                importLog.RowsDuplicate++;
+            }
+            else
+            {
+                importLog.RowsInserted++;
+            }
+
+            report.ReportType         = reportType;
+            report.ProposalNo         = proposalNo;
+            report.PolicyNo           = PMINSRECFileReader::value(row, 'POLICYNO');
+            report.PolicyType         = PMINSRECFileReader::value(row, 'POLICY_TYPE');
+            report.PolicyIssueDate    = PMINSRECFileReader::parseDate(PMINSRECFileReader::value(row, 'POLICY_ISSUE_DATE'));
+            report.ICName             = PMINSRECFileReader::value(row, 'IC_NAME');
+            report.GrossPremium       = PMINSRECFileReader::parseAmount(PMINSRECFileReader::value(row, 'GROSSPREMIUM'));
+            report.FreeIns            = PMINSRECFileReader::value(row, 'FREE_INS');
+            report.CustName           = PMINSRECFileReader::value(row, 'CUSTNAME');
+            report.OutletName         = PMINSRECFileReader::value(row, 'OUTLET_NAME');
+            report.RegnNo             = strUpr(strRem(PMINSRECFileReader::value(row, 'REGN_NO_FOR_SEARCH'), ' '));
+            report.EngineNo           = PMINSRECFileReader::value(row, 'ENGINE_NO');
+            report.ChassisNo          = PMINSRECFileReader::value(row, 'CHASSIS_NO');
+            report.DealerOutletCity   = PMINSRECFileReader::value(row, 'DEALER_OUTLET_CITY_NAME');
+            report.DlrExecutive       = PMINSRECFileReader::value(row, 'DLR_EXECUTIVE');
+            report.RDInstrumentNo     = PMINSRECFileReader::value(row, 'RD_INSTRUMENT_NO');
+            report.RInstBankName      = PMINSRECFileReader::value(row, 'R_INST_BANKNAME');
+            report.RDInstrumentDate   = PMINSRECFileReader::parseDate(PMINSRECFileReader::value(row, 'RD_INSTRUMENT_DATE'));
+            report.RDInstrumentAmount = PMINSRECFileReader::parseAmount(PMINSRECFileReader::value(row, 'RD_INSTRUMENT_AMOUNT'));
+            report.OutletDepositNo    = PMINSRECFileReader::value(row, 'OUTLET_DEPOSIT_NO');
+            report.MulDepositNo       = PMINSRECFileReader::value(row, 'MUL_DEPOSIT_NO');
+            report.PaymentDate        = PMINSRECFileReader::parseDate(PMINSRECFileReader::value(row, 'PAYMENT_DATE'));
+            report.FileName           = _fileName;
+            report.write();
+        }
+
+        importLog.update();
+
+        // refresh the supporting data on grid lines whose JV2 is not created yet
+        while select forupdate settlement
+            where settlement.JV2JournalNum == ''
+        {
+            if (PMINSRECIndividualReport::find(settlement.RequestId))
+            {
+                PMINSRECSettlementBuilder::enrich(settlement);
+                settlement.update();
+            }
+        }
+
+        ttscommit;
+
+        info(strFmt("%1: %2 rows read, %3 new, %4 updated, %5 skipped.",
+            _fileName, importLog.RowsRead, importLog.RowsInserted, importLog.RowsDuplicate, importLog.RowsSkipped));
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

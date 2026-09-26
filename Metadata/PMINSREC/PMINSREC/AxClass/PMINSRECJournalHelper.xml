@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECJournalHelper</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Creates vendor invoice journals (one journal per journal name per run) and their lines,
+/// and posts them.
+/// </summary>
+public final class PMINSRECJournalHelper
+{
+    Map journals;       // LedgerJournalNameId -> LedgerJournalId created in this run
+    str journalDescription;
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>new</Name>
+				<Source><![CDATA[
+    protected void new()
+    {
+        journals = new Map(Types::String, Types::String);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>construct</Name>
+				<Source><![CDATA[
+    public static PMINSRECJournalHelper construct(str _journalDescription)
+    {
+        PMINSRECJournalHelper helper = new PMINSRECJournalHelper();
+
+        helper.parmJournalDescription(_journalDescription);
+
+        return helper;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parmJournalDescription</Name>
+				<Source><![CDATA[
+    public str parmJournalDescription(str _journalDescription = journalDescription)
+    {
+        journalDescription = _journalDescription;
+        return journalDescription;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>journalNum</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Returns the journal of this run for the journal name; creates the journal header in its own transaction.
+    /// </summary>
+    public LedgerJournalId journalNum(LedgerJournalNameId _journalName)
+    {
+        LedgerJournalName  ledgerJournalName;
+        LedgerJournalTable ledgerJournalTable;
+
+        if (journals.exists(_journalName))
+        {
+            return journals.lookup(_journalName);
+        }
+
+        ledgerJournalName = LedgerJournalName::find(_journalName);
+
+        if (!ledgerJournalName)
+        {
+            throw error(strFmt("Journal name %1 does not exist.", _journalName));
+        }
+
+        ttsbegin;
+
+        ledgerJournalTable.clear();
+        ledgerJournalTable.initValue();
+        ledgerJournalTable.JournalName = _journalName;
+        ledgerJournalTable.initFromLedgerJournalName();
+        ledgerJournalTable.JournalNum  = JournalTableData::newTable(ledgerJournalTable).nextJournalId();
+        ledgerJournalTable.Name        = journalDescription;
+        ledgerJournalTable.insert();
+
+        ttscommit;
+
+        journals.insert(_journalName, ledgerJournalTable.JournalNum);
+
+        return ledgerJournalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>newVoucher</Name>
+				<Source><![CDATA[
+    public Voucher newVoucher(LedgerJournalId _journalNum)
+    {
+        LedgerJournalName ledgerJournalName = LedgerJournalName::find(LedgerJournalTable::find(_journalNum).JournalName);
+
+        return NumberSeq::newGetVoucherFromId(ledgerJournalName.NumberSequenceTable, false).voucher();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>addLine</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Adds a balanced journal line: <paramref name="_amount"/> &gt; 0 debits the account and credits the offset
+    /// account, &lt; 0 credits the account and debits the offset account.
+    /// </summary>
+    public LedgerJournalTrans addLine(
+        LedgerJournalId     _journalNum,
+        Voucher             _voucher,
+        TransDate           _transDate,
+        LedgerJournalACType _accountType,
+        str                 _account,
+        AmountCur           _amount,
+        LedgerJournalACType _offsetAccountType,
+        str                 _offsetAccount,
+        InvoiceId           _invoice,
+        str                 _text)
+    {
+        LedgerJournalTrans ledgerJournalTrans;
+        LedgerJournalTrans lastLine;
+
+        select maxof(LineNum) from lastLine
+            where lastLine.JournalNum == _journalNum;
+
+        ledgerJournalTrans.clear();
+        ledgerJournalTrans.initValue();
+        ledgerJournalTrans.JournalNum    = _journalNum;
+        ledgerJournalTrans.LineNum       = lastLine.LineNum + 1;
+        ledgerJournalTrans.Voucher       = _voucher;
+        ledgerJournalTrans.TransDate     = _transDate;
+        ledgerJournalTrans.DocumentDate  = _transDate;
+        ledgerJournalTrans.Company       = curExt();
+        ledgerJournalTrans.OffsetCompany = curExt();
+        ledgerJournalTrans.CurrencyCode  = Ledger::accountingCurrency(CompanyInfo::current());
+        ledgerJournalTrans.ExchRate      = ExchangeRateHelper::exchRate(ledgerJournalTrans.CurrencyCode, _transDate);
+
+        ledgerJournalTrans.AccountType = _accountType;
+        ledgerJournalTrans.parmAccount(_account, _accountType);
+
+        ledgerJournalTrans.OffsetAccountType = _offsetAccountType;
+        ledgerJournalTrans.parmOffsetAccount(_offsetAccount, _offsetAccountType);
+
+        if (_amount >= 0)
+        {
+            ledgerJournalTrans.AmountCurDebit  = _amount;
+        }
+        else
+        {
+            ledgerJournalTrans.AmountCurCredit = -_amount;
+        }
+
+        switch (_accountType)
+        {
+            case LedgerJournalACType::Vend:
+                ledgerJournalTrans.PostingProfile   = VendParameters::find().PostingProfile;
+                ledgerJournalTrans.DefaultDimension = VendTable::find(_account).DefaultDimension;
+                break;
+
+            case LedgerJournalACType::Cust:
+                ledgerJournalTrans.PostingProfile   = CustParameters::find().PostingProfile;
+                ledgerJournalTrans.DefaultDimension = CustTable::find(_account).DefaultDimension;
+                break;
+        }
+
+        if (_offsetAccountType == LedgerJournalACType::Vend)
+        {
+            ledgerJournalTrans.OffsetDefaultDimension = VendTable::find(_offsetAccount).DefaultDimension;
+            if (!ledgerJournalTrans.PostingProfile)
+            {
+                ledgerJournalTrans.PostingProfile = VendParameters::find().PostingProfile;
+            }
+        }
+
+        ledgerJournalTrans.Invoice  = _invoice;
+        ledgerJournalTrans.Txt      = _text;
+        ledgerJournalTrans.Approved = NoYes::Yes;
+        ledgerJournalTrans.Approver = HcmWorkerLookup::currentWorker();
+        ledgerJournalTrans.insert();
+
+        return ledgerJournalTrans;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createdJournals</Name>
+				<Source><![CDATA[
+    public Set createdJournals()
+    {
+        Set            journalSet = new Set(Types::String);
+        MapEnumerator  enumerator = journals.getEnumerator();
+
+        while (enumerator.moveNext())
+        {
+            journalSet.add(enumerator.currentValue());
+        }
+
+        return journalSet;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>deleteEmptyJournals</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Removes journal headers of this run that did not get any line (all lines failed).
+    /// </summary>
+    public void deleteEmptyJournals()
+    {
+        MapEnumerator      enumerator = journals.getEnumerator();
+        LedgerJournalTable ledgerJournalTable;
+        LedgerJournalTrans ledgerJournalTrans;
+
+        ttsbegin;
+
+        while (enumerator.moveNext())
+        {
+            select firstonly RecId from ledgerJournalTrans
+                where ledgerJournalTrans.JournalNum == enumerator.currentValue();
+
+            if (!ledgerJournalTrans.RecId)
+            {
+                ledgerJournalTable = LedgerJournalTable::find(enumerator.currentValue(), true);
+
+                if (ledgerJournalTable && !ledgerJournalTable.Posted)
+                {
+                    ledgerJournalTable.delete();
+                }
+            }
+        }
+
+        ttscommit;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>postJournal</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Posts the journal. Returns true when the journal is posted.
+    /// </summary>
+    public static boolean postJournal(LedgerJournalId _journalNum)
+    {
+        LedgerJournalTable     ledgerJournalTable = LedgerJournalTable::find(_journalNum);
+        LedgerJournalCheckPost ledgerJournalCheckPost;
+
+        if (!ledgerJournalTable)
+        {
+            return false;
+        }
+
+        if (!ledgerJournalTable.Posted)
+        {
+            ledgerJournalCheckPost = LedgerJournalCheckPost::newLedgerJournalTable(ledgerJournalTable, NoYes::Yes);
+            ledgerJournalCheckPost.runOperation();
+        }
+
+        return LedgerJournalTable::find(_journalNum).Posted == NoYes::Yes;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isPosted</Name>
+				<Source><![CDATA[
+    public static boolean isPosted(LedgerJournalId _journalNum)
+    {
+        return _journalNum && LedgerJournalTable::find(_journalNum).Posted == NoYes::Yes;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

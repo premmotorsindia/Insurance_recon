@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECFileFormat</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECFileFormat extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECFileFormat</Name>
+			<Table>PMINSRECFileFormat</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>CardBank</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CardField</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ColumnName</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:CardFileColumnMapping</Caption>
+		<DataSource xmlns="">PMINSRECFileFormat</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+				<Name>ActionPane</Name>
+				<Type>ActionPane</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+						<Name>ActionPaneTab</Name>
+						<Type>ActionPaneTab</Type>
+						<FormControlExtension i:nil="true" />
+						<Controls>
+							<AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+								<Name>ButtonGroup</Name>
+								<Type>ButtonGroup</Type>
+								<FormControlExtension i:nil="true" />
+								<Controls>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>LoadDefaults</Name>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECFileFormat</DataSource>
+									<MenuItemName>PMINSRECFileFormatDefaults</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<Text>@PMINSREC:LoadIciciHsbcDefaults</Text>
+								</AxFormControl>
+								</Controls>
+							</AxFormControl>
+						</Controls>
+						<Caption>@PMINSREC:Process</Caption>
+					</AxFormControl>
+				</Controls>
+			</AxFormControl>
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_CardBank</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardBank</DataField>
+						<DataSource>PMINSRECFileFormat</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_CardField</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardField</DataField>
+						<DataSource>PMINSRECFileFormat</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ColumnName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ColumnName</DataField>
+						<DataSource>PMINSRECFileFormat</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECFileFormat</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

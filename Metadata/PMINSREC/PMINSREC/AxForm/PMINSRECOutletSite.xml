@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECOutletSite</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECOutletSite extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECOutletSite</Name>
+			<Table>PMINSRECOutletSite</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>OutletCode</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InventSiteId</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>Description</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:OutletSiteMapping</Caption>
+		<DataSource xmlns="">PMINSRECOutletSite</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_OutletCode</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutletCode</DataField>
+						<DataSource>PMINSRECOutletSite</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_InventSiteId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InventSiteId</DataField>
+						<DataSource>PMINSRECOutletSite</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_Description</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Description</DataField>
+						<DataSource>PMINSRECOutletSite</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECOutletSite</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

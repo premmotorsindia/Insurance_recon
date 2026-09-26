@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECPostingSetup</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Posting setup per card bank, insurance type (new car / renewal) and site.
+/// </summary>
+public class PMINSRECPostingSetup extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>find</Name>
+				<Source><![CDATA[
+    public static PMINSRECPostingSetup find(
+        PMINSRECCardBank      _cardBank,
+        PMINSRECInsuranceType _insuranceType,
+        InventSiteId          _inventSiteId,
+        boolean               _forupdate = false)
+    {
+        PMINSRECPostingSetup setup;
+
+        setup.selectForUpdate(_forupdate);
+
+        select firstonly setup
+            where setup.CardBank      == _cardBank
+               && setup.InsuranceType == _insuranceType
+               && setup.InventSiteId  == _inventSiteId;
+
+        return setup;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>validateWrite</Name>
+				<Source><![CDATA[
+    public boolean validateWrite()
+    {
+        boolean ret = super();
+
+        if (ret && this.InsuranceType == PMINSRECInsuranceType::None)
+        {
+            ret = checkFailed("Insurance type must be New car or Renewal.");
+        }
+
+        if (ret && this.InsuranceType == PMINSRECInsuranceType::Renewal && !this.FixedVendAccount)
+        {
+            ret = checkFailed("Fixed vendor is mandatory for renewal setup.");
+        }
+
+        if (ret && this.DiffAccountNum)
+        {
+            switch (this.DiffAccountType)
+            {
+                case LedgerJournalACType::Ledger:
+                    if (!MainAccount::findByMainAccountId(this.DiffAccountNum))
+                    {
+                        ret = checkFailed(strFmt("Main account %1 does not exist.", this.DiffAccountNum));
+                    }
+                    break;
+
+                case LedgerJournalACType::Cust:
+                    if (!CustTable::exist(this.DiffAccountNum))
+                    {
+                        ret = checkFailed(strFmt("Customer %1 does not exist.", this.DiffAccountNum));
+                    }
+                    break;
+
+                case LedgerJournalACType::Vend:
+                    if (!VendTable::exist(this.DiffAccountNum))
+                    {
+                        ret = checkFailed(strFmt("Vendor %1 does not exist.", this.DiffAccountNum));
+                    }
+                    break;
+
+                default:
+                    ret = checkFailed("Difference account type must be Ledger, Customer or Vendor.");
+            }
+        }
+
+        return ret;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:CardSettlementPostingSetup</Label>
+	<TitleField1>CardBank</TitleField1>
+	<TitleField2>InventSiteId</TitleField2>
+	<CacheLookup>Found</CacheLookup>
+	<ClusteredIndex>SetupIdx</ClusteredIndex>
+	<PrimaryIndex>SetupIdx</PrimaryIndex>
+	<ReplacementKey>SetupIdx</ReplacementKey>
+	<TableGroup>Group</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>CardBank</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InsuranceType</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InventSiteId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JournalNameJV1</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JournalNameJV2</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PayableVendAccount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>BankAccountId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>FixedVendAccount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DiffAccountType</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DiffAccountNum</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Description</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>CardBank</Name>
+			<EnumType>PMINSRECCardBank</EnumType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>InsuranceType</Name>
+			<EnumType>PMINSRECInsuranceType</EnumType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>InventSiteId</Name>
+			<ExtendedDataType>InventSiteId</ExtendedDataType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>JournalNameJV1</Name>
+			<ExtendedDataType>LedgerJournalNameId</ExtendedDataType>
+			<Label>@PMINSREC:Jv1JournalNameVendorDrCardBankCr</Label>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>JournalNameJV2</Name>
+			<ExtendedDataType>LedgerJournalNameId</ExtendedDataType>
+			<Label>@PMINSREC:Jv2JournalNameCustomerOrReceiptSettlement</Label>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PayableVendAccount</Name>
+			<ExtendedDataType>VendAccount</ExtendedDataType>
+			<Label>@PMINSREC:VendorPayableAccount</Label>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>BankAccountId</Name>
+			<ExtendedDataType>CompanyBankAccountId</ExtendedDataType>
+			<Label>@PMINSREC:CardBankAccount</Label>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>FixedVendAccount</Name>
+			<ExtendedDataType>VendAccount</ExtendedDataType>
+			<Label>@PMINSREC:FixedVendorRenewalReceipts</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>DiffAccountType</Name>
+			<EnumType>LedgerJournalACType</EnumType>
+			<Label>@PMINSREC:DifferenceAccountType</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>DiffAccountNum</Name>
+			<ExtendedDataType>PMINSRECAccountNum</ExtendedDataType>
+			<Label>@PMINSREC:DifferenceAccount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>Description</Name>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:Description</Label>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>SetupIdx</Name>
+			<AlternateKey>Yes</AlternateKey>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>CardBank</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>InsuranceType</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>InventSiteId</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+		<AxTableRelation>
+			<Name>InventSite</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>InventSite</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>InventSiteId</Name>
+					<Field>InventSiteId</Field>
+					<RelatedField>SiteId</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>JournalNameJV1</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>LedgerJournalName</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>JournalNameJV1</Name>
+					<Field>JournalNameJV1</Field>
+					<RelatedField>JournalName</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>JournalNameJV2</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>LedgerJournalName</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>JournalNameJV2</Name>
+					<Field>JournalNameJV2</Field>
+					<RelatedField>JournalName</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>PayableVendTable</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>VendTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>PayableVendAccount</Name>
+					<Field>PayableVendAccount</Field>
+					<RelatedField>AccountNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>FixedVendTable</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>VendTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>FixedVendAccount</Name>
+					<Field>FixedVendAccount</Field>
+					<RelatedField>AccountNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>BankAccountTable</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>BankAccountTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>BankAccountId</Name>
+					<Field>BankAccountId</Field>
+					<RelatedField>AccountID</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+	</Relations>
+	<StateMachines />
+</AxTable>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxMenuExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>MainMenu.PMINSREC</Name>
+	<Elements>
+		<AxMenuExtensionElement>
+			<MenuElement i:type="AxMenuElementMenuReference">
+				<Name>PMINSRECInsuranceRecon</Name>
+				<MenuName>PMINSRECInsuranceRecon</MenuName>
+			</MenuElement>
+		</AxMenuExtensionElement>
+	</Elements>
+	<MenuElementModifications />
+	<PropertyModifications />
+</AxMenuExtension>

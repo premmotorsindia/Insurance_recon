@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECParameters</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECParameters extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>init</Name>
+				<Source><![CDATA[
+    public void init()
+    {
+        PMINSRECParameters::find();
+        super();
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECParameters</Name>
+			<Table>PMINSRECParameters</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>AutoPostSettle</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>NewCarCustGroup</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>MaxDifferenceAmount</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<AllowDelete>No</AllowDelete>
+			<InsertIfEmpty>No</InsertIfEmpty>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:InsuranceCardSettlementParameters</Caption>
+		<DataSource xmlns="">PMINSRECParameters</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGroupControl">
+				<Name>General</Name>
+				<Type>Group</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>General_AutoPostSettle</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>AutoPostSettle</DataField>
+						<DataSource>PMINSRECParameters</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>General_NewCarCustGroup</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>NewCarCustGroup</DataField>
+						<DataSource>PMINSRECParameters</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>General_MaxDifferenceAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>MaxDifferenceAmount</DataField>
+						<DataSource>PMINSRECParameters</DataSource>
+					</AxFormControl>
+				</Controls>
+				<Caption>@PMINSREC:General</Caption>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

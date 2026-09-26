@@ -1,0 +1,712 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECProcessEngine</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Processes the reconciliation grid. Runs after every upload and from the "Process / re-match" button
+/// (daily re-match of pending lines against the latest receipts).
+/// <para>JV1 (all lines): Vendor payable Dr / Card bank Cr.</para>
+/// <para>JV2 new car: Customer (matched on chassis number in the new car customer group) Dr / Vendor payable Cr.</para>
+/// <para>JV2 renewal: receipt found on the fixed vendor (registration number in the text):
+/// Fixed vendor Dr (receipt amount) + Difference account Dr/Cr (card amount - receipt amount) / Vendor payable Cr (card amount).
+/// The vendor payable and the fixed vendor receipt are settled.</para>
+/// <para>When the parameter "Auto post and settle" is off, journals are only created. Posting is done by the user;
+/// the next run continues with JV2 and the settlement of the posted journals.</para>
+/// </summary>
+public final class PMINSRECProcessEngine
+{
+    PMINSRECParameters parameters;
+    int                countJV1, countJV2, countSettled, countPending, countError;
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    public static void main(Args _args)
+    {
+        PMINSRECProcessEngine::construct().run();
+
+        PMINSRECFormHelper::refreshCaller(_args);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>construct</Name>
+				<Source><![CDATA[
+    public static PMINSRECProcessEngine construct()
+    {
+        return new PMINSRECProcessEngine();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>run</Name>
+				<Source><![CDATA[
+    public void run()
+    {
+        parameters = PMINSRECParameters::find();
+
+        this.createJV1();
+        this.updatePostedJV1();
+        this.createJV2();
+        this.settlePostedJV2();
+
+        info(strFmt("Card settlement: %1 JV1 lines, %2 JV2 lines, %3 settled, %4 waiting for receipt / customer, %5 errors.",
+            countJV1, countJV2, countSettled, countPending, countError));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createJV1</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// JV1: Vendor payable Dr / Card bank Cr for every new line with a positive net amount.
+    /// </summary>
+    private void createJV1()
+    {
+        PMINSRECCardSettlement settlement;
+        PMINSRECPostingSetup   setup;
+        PMINSRECJournalHelper  journalHelper = PMINSRECJournalHelper::construct("Insurance card settlement JV1");
+        LedgerJournalTrans     ledgerJournalTrans;
+        LedgerJournalId        journalNum;
+        List                   recIds = this.findLines(false);
+        ListEnumerator         enumerator = recIds.getEnumerator();
+        int                    infologStart;
+
+        while (enumerator.moveNext())
+        {
+            infologStart = infologLine();
+
+            try
+            {
+                settlement = PMINSRECCardSettlement::findRecId(enumerator.current());
+                PMINSRECSettlementBuilder::enrich(settlement);
+                setup      = this.postingSetup(settlement);
+                journalNum = journalHelper.journalNum(setup.JournalNameJV1);
+
+                ttsbegin;
+
+                settlement = PMINSRECCardSettlement::findRecId(enumerator.current(), true);
+                PMINSRECSettlementBuilder::enrich(settlement);
+
+                ledgerJournalTrans = journalHelper.addLine(
+                    journalNum,
+                    journalHelper.newVoucher(journalNum),
+                    settlement.TransDate,
+                    LedgerJournalACType::Vend,
+                    setup.PayableVendAccount,
+                    settlement.CardAmount,
+                    LedgerJournalACType::Bank,
+                    setup.BankAccountId,
+                    settlement.RequestId,
+                    settlement.Narration);
+
+                settlement.PayableVendAccount = setup.PayableVendAccount;
+                settlement.BankAccountId      = setup.BankAccountId;
+                settlement.JV1JournalNum      = ledgerJournalTrans.JournalNum;
+                settlement.JV1Voucher         = ledgerJournalTrans.Voucher;
+                settlement.Status             = PMINSRECStatus::JV1Created;
+                settlement.ErrorText          = '';
+                settlement.update();
+
+                ttscommit;
+
+                countJV1++;
+            }
+            catch (Exception::Error)
+            {
+                this.setError(enumerator.current(), infologStart);
+            }
+        }
+
+        journalHelper.deleteEmptyJournals();
+
+        if (parameters.AutoPostSettle)
+        {
+            this.postJournals(journalHelper.createdJournals(), fieldNum(PMINSRECCardSettlement, JV1JournalNum));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>updatePostedJV1</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Marks JV1 as posted when its journal is posted (auto posting or manual posting by the user).
+    /// </summary>
+    private void updatePostedJV1()
+    {
+        PMINSRECCardSettlement settlement;
+
+        ttsbegin;
+
+        while select forupdate settlement
+            where settlement.JV1JournalNum != ''
+               && settlement.JV1Posted     == NoYes::No
+        {
+            if (PMINSRECJournalHelper::isPosted(settlement.JV1JournalNum))
+            {
+                settlement.JV1Posted = NoYes::Yes;
+
+                if (settlement.Status == PMINSRECStatus::JV1Created || settlement.Status == PMINSRECStatus::Error)
+                {
+                    settlement.Status = PMINSRECStatus::JV1Posted;
+                }
+                settlement.update();
+            }
+        }
+
+        ttscommit;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createJV2</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// JV2 for lines whose JV1 is posted: matches the customer (new car) or the receipt (renewal).
+    /// </summary>
+    private void createJV2()
+    {
+        PMINSRECCardSettlement settlement;
+        PMINSRECPostingSetup   setup;
+        PMINSRECJournalHelper  journalHelper = PMINSRECJournalHelper::construct("Insurance card settlement JV2");
+        LedgerJournalId        journalNum;
+        List                   recIds = this.findLines(true);
+        ListEnumerator         enumerator = recIds.getEnumerator();
+        int                    infologStart;
+        boolean                created;
+
+        while (enumerator.moveNext())
+        {
+            infologStart = infologLine();
+
+            try
+            {
+                settlement = PMINSRECCardSettlement::findRecId(enumerator.current());
+                setup      = this.postingSetup(settlement);
+                journalNum = '';
+
+                ttsbegin;
+
+                settlement = PMINSRECCardSettlement::findRecId(enumerator.current(), true);
+                PMINSRECSettlementBuilder::enrich(settlement);
+
+                if (settlement.InsuranceType == PMINSRECInsuranceType::NewCar)
+                {
+                    created = this.createJV2NewCar(settlement, setup, journalHelper);
+                }
+                else
+                {
+                    created = this.createJV2Renewal(settlement, setup, journalHelper);
+                }
+
+                settlement.update();
+
+                ttscommit;
+
+                if (created)
+                {
+                    countJV2++;
+                }
+                else
+                {
+                    countPending++;
+                }
+            }
+            catch (Exception::Error)
+            {
+                this.setError(enumerator.current(), infologStart);
+            }
+        }
+
+        journalHelper.deleteEmptyJournals();
+
+        if (parameters.AutoPostSettle)
+        {
+            this.postJournals(journalHelper.createdJournals(), fieldNum(PMINSRECCardSettlement, JV2JournalNum));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createJV2NewCar</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// New car: Customer Dr / Vendor payable Cr. The customer is found on the chassis number.
+    /// </summary>
+    private boolean createJV2NewCar(PMINSRECCardSettlement _settlement, PMINSRECPostingSetup _setup, PMINSRECJournalHelper _journalHelper)
+    {
+        CustAccount        custAccount = this.findCustomerByChassis(_settlement.ChassisNum);
+        LedgerJournalId    journalNum;
+        LedgerJournalTrans ledgerJournalTrans;
+
+        if (!custAccount)
+        {
+            _settlement.Status    = PMINSRECStatus::CustomerNotFound;
+            _settlement.ErrorText = _settlement.ChassisNum
+                ? strFmt("No customer in group %1 with chassis number %2.", parameters.NewCarCustGroup, _settlement.ChassisNum)
+                : "Chassis number missing: upload the new car individual report.";
+            return false;
+        }
+
+        journalNum = _journalHelper.journalNum(_setup.JournalNameJV2);
+
+        ledgerJournalTrans = _journalHelper.addLine(
+            journalNum,
+            _journalHelper.newVoucher(journalNum),
+            _settlement.TransDate,
+            LedgerJournalACType::Cust,
+            custAccount,
+            _settlement.CardAmount,
+            LedgerJournalACType::Vend,
+            _settlement.PayableVendAccount,
+            _settlement.RequestId + '-2',
+            _settlement.Narration);
+
+        _settlement.CustAccount             = custAccount;
+        _settlement.InsuranceReceivedAmount = 0;
+        _settlement.DifferenceAmount        = 0;
+        _settlement.JV2JournalNum           = ledgerJournalTrans.JournalNum;
+        _settlement.JV2Voucher              = ledgerJournalTrans.Voucher;
+        _settlement.Status                  = PMINSRECStatus::JV2Created;
+        _settlement.ErrorText               = '';
+
+        return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createJV2Renewal</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Renewal: Fixed vendor Dr (receipt) + Difference Dr/Cr / Vendor payable Cr (card amount).
+    /// </summary>
+    private boolean createJV2Renewal(PMINSRECCardSettlement _settlement, PMINSRECPostingSetup _setup, PMINSRECJournalHelper _journalHelper)
+    {
+        VendTransOpen   receiptOpen;
+        VendTrans       receiptTrans;
+        AmountMST       receiptAmount, differenceAmount;
+        LedgerJournalId journalNum;
+        Voucher         voucher;
+
+        if (!_settlement.RegistrationNo)
+        {
+            _settlement.Status    = PMINSRECStatus::ReceiptNotAvailable;
+            _settlement.ErrorText = "Registration number missing: upload the renewal individual report.";
+            return false;
+        }
+
+        receiptOpen = this.findReceipt(_settlement, _setup.FixedVendAccount);
+
+        if (!receiptOpen)
+        {
+            _settlement.Status                  = PMINSRECStatus::ReceiptNotAvailable;
+            _settlement.InsuranceReceivedAmount = 0;
+            _settlement.DifferenceAmount        = 0;
+            _settlement.ErrorText               = strFmt("No open receipt on vendor %1 with registration number %2.",
+                _setup.FixedVendAccount, _settlement.RegistrationNo);
+            return false;
+        }
+
+        receiptTrans     = VendTrans::find(receiptOpen.RefRecId);
+        receiptAmount    = -receiptOpen.AmountMST;
+        differenceAmount = _settlement.CardAmount - receiptAmount;
+
+        _settlement.ReceiptVendAccount      = receiptTrans.AccountNum;
+        _settlement.ReceiptVoucher          = receiptTrans.Voucher;
+        _settlement.ReceiptVendTransRecId   = receiptTrans.RecId;
+        _settlement.InsuranceReceivedAmount = receiptAmount;
+        _settlement.DifferenceAmount        = differenceAmount;
+
+        if (differenceAmount
+            && parameters.MaxDifferenceAmount
+            && abs(differenceAmount) > parameters.MaxDifferenceAmount
+            && !_settlement.ManualReleased)
+        {
+            _settlement.Status    = PMINSRECStatus::Manual;
+            _settlement.ErrorText = strFmt("Difference %1 is more than the limit %2. Use Release manual line to post.",
+                differenceAmount, parameters.MaxDifferenceAmount);
+            return false;
+        }
+
+        if (differenceAmount && (!_setup.DiffAccountNum))
+        {
+            throw error(strFmt("Difference account is not set up for %1 / %2 / %3.",
+                _setup.CardBank, _setup.InsuranceType, _setup.InventSiteId));
+        }
+
+        journalNum = _journalHelper.journalNum(_setup.JournalNameJV2);
+        voucher    = _journalHelper.newVoucher(journalNum);
+
+        // Fixed vendor Dr receipt amount / Vendor payable Cr
+        _journalHelper.addLine(
+            journalNum,
+            voucher,
+            _settlement.TransDate,
+            LedgerJournalACType::Vend,
+            receiptTrans.AccountNum,
+            receiptAmount,
+            LedgerJournalACType::Vend,
+            _settlement.PayableVendAccount,
+            _settlement.RequestId + '-2',
+            _settlement.Narration);
+
+        // Difference (discount given) Dr / Vendor payable Cr; negative difference is posted the other way round
+        if (differenceAmount)
+        {
+            _journalHelper.addLine(
+                journalNum,
+                voucher,
+                _settlement.TransDate,
+                _setup.DiffAccountType,
+                _setup.DiffAccountNum,
+                differenceAmount,
+                LedgerJournalACType::Vend,
+                _settlement.PayableVendAccount,
+                _settlement.RequestId + '-D',
+                _settlement.Narration);
+        }
+
+        _settlement.JV2JournalNum = journalNum;
+        _settlement.JV2Voucher    = voucher;
+        _settlement.Status        = PMINSRECStatus::JV2Created;
+        _settlement.ErrorText     = '';
+
+        return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>settlePostedJV2</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// For posted JV2: settles JV1 against JV2 on the vendor payable and, for renewals,
+    /// the receipt against JV2 on the fixed vendor.
+    /// </summary>
+    private void settlePostedJV2()
+    {
+        PMINSRECCardSettlement settlement;
+        List                   recIds = new List(Types::Int64);
+        ListEnumerator         enumerator;
+        int                    infologStart;
+
+        while select RecId from settlement
+            where settlement.JV2JournalNum != ''
+               && settlement.Settled       == NoYes::No
+               && settlement.Status        != PMINSRECStatus::Manual
+        {
+            recIds.addEnd(settlement.RecId);
+        }
+
+        enumerator = recIds.getEnumerator();
+
+        while (enumerator.moveNext())
+        {
+            infologStart = infologLine();
+
+            try
+            {
+                settlement = PMINSRECCardSettlement::findRecId(enumerator.current());
+
+                if (!PMINSRECJournalHelper::isPosted(settlement.JV2JournalNum))
+                {
+                    continue;
+                }
+
+                ttsbegin;
+
+                settlement = PMINSRECCardSettlement::findRecId(enumerator.current(), true);
+                settlement.JV2Posted = NoYes::Yes;
+                this.settle(settlement);
+                settlement.Settled   = NoYes::Yes;
+                settlement.Status    = PMINSRECStatus::Completed;
+                settlement.ErrorText = '';
+                settlement.update();
+
+                ttscommit;
+
+                countSettled++;
+            }
+            catch (Exception::Error)
+            {
+                this.setError(enumerator.current(), infologStart);
+            }
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>settle</Name>
+				<Source><![CDATA[
+    private void settle(PMINSRECCardSettlement _settlement)
+    {
+        Map           vendorTrans = new Map(Types::String, Types::Class);
+        MapEnumerator enumerator;
+        Set           recIds;
+
+        // Vendor payable: JV1 debit against the JV2 credit(s)
+        recIds = new Set(Types::Int64);
+        PMINSRECSettleHelper::vendTransOfVoucher(recIds, _settlement.PayableVendAccount, _settlement.JV1Voucher, _settlement.TransDate);
+        PMINSRECSettleHelper::vendTransOfVoucher(recIds, _settlement.PayableVendAccount, _settlement.JV2Voucher, _settlement.TransDate);
+        vendorTrans.insert(_settlement.PayableVendAccount, recIds);
+
+        // Renewal: fixed vendor receipt against the JV2 debit
+        if (_settlement.InsuranceType == PMINSRECInsuranceType::Renewal && _settlement.ReceiptVendTransRecId)
+        {
+            recIds = vendorTrans.exists(_settlement.ReceiptVendAccount)
+                ? vendorTrans.lookup(_settlement.ReceiptVendAccount)
+                : new Set(Types::Int64);
+
+            recIds.add(_settlement.ReceiptVendTransRecId);
+            PMINSRECSettleHelper::vendTransOfVoucher(recIds, _settlement.ReceiptVendAccount, _settlement.JV2Voucher, _settlement.TransDate);
+            vendorTrans.insert(_settlement.ReceiptVendAccount, recIds);
+        }
+
+        enumerator = vendorTrans.getEnumerator();
+
+        while (enumerator.moveNext())
+        {
+            PMINSRECSettleHelper::settleVendTrans(enumerator.currentKey(), enumerator.currentValue());
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>postJournals</Name>
+				<Source><![CDATA[
+    private void postJournals(Set _journals, FieldId _journalField)
+    {
+        SetEnumerator          enumerator = _journals.getEnumerator();
+        PMINSRECCardSettlement settlement;
+        LedgerJournalId        journalNum;
+        int                    infologStart;
+        str                    message;
+
+        while (enumerator.moveNext())
+        {
+            journalNum   = enumerator.current();
+            infologStart = infologLine();
+
+            try
+            {
+                PMINSRECJournalHelper::postJournal(journalNum);
+            }
+            catch (Exception::Error)
+            {
+                message = PMINSRECProcessEngine::infologText(infologStart);
+
+                ttsbegin;
+
+                while select forupdate settlement
+                    where settlement.(_journalField) == journalNum
+                {
+                    settlement.ErrorText = strFmt("Posting of journal %1 failed: %2", journalNum, message);
+                    settlement.update();
+                }
+
+                ttscommit;
+            }
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findLines</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Returns the RecIds of the lines that need JV1 (<paramref name="_forJV2"/> = false)
+    /// or JV2 (<paramref name="_forJV2"/> = true).
+    /// </summary>
+    private List findLines(boolean _forJV2)
+    {
+        PMINSRECCardSettlement settlement;
+        List                   recIds = new List(Types::Int64);
+
+        if (_forJV2)
+        {
+            while select RecId from settlement
+                where settlement.JV1Posted     == NoYes::Yes
+                   && settlement.JV2JournalNum == ''
+                   && settlement.Status        != PMINSRECStatus::Manual
+                   && settlement.Status        != PMINSRECStatus::NetZeroSkipped
+            {
+                recIds.addEnd(settlement.RecId);
+            }
+        }
+        else
+        {
+            while select RecId from settlement
+                where settlement.JV1JournalNum == ''
+                   && (settlement.Status == PMINSRECStatus::Draft || settlement.Status == PMINSRECStatus::Error)
+                   && settlement.CardAmount > 0
+                   && settlement.InsuranceType != PMINSRECInsuranceType::None
+            {
+                recIds.addEnd(settlement.RecId);
+            }
+        }
+
+        return recIds;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>postingSetup</Name>
+				<Source><![CDATA[
+    private PMINSRECPostingSetup postingSetup(PMINSRECCardSettlement _settlement)
+    {
+        PMINSRECPostingSetup setup;
+
+        if (!_settlement.InventSiteId)
+        {
+            throw error(strFmt("Outlet %1 is not mapped to a site.", _settlement.OutletCode));
+        }
+
+        setup = PMINSRECPostingSetup::find(_settlement.CardBank, _settlement.InsuranceType, _settlement.InventSiteId);
+
+        if (!setup)
+        {
+            throw error(strFmt("Posting setup missing for card %1, type %2, site %3.",
+                _settlement.CardBank, _settlement.InsuranceType, _settlement.InventSiteId));
+        }
+
+        return setup;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findCustomerByChassis</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Finds the new car customer on the chassis number. The portal sometimes gives only the last digits of the
+    /// chassis number, so a unique "ends with" match is accepted as well.
+    /// </summary>
+    private CustAccount findCustomerByChassis(PMINSRECChassisNum _chassisNum)
+    {
+        CustTable custTable;
+        str       pattern;
+        int       found;
+        CustAccount custAccount;
+
+        if (!_chassisNum)
+        {
+            return '';
+        }
+
+        select firstonly AccountNum from custTable
+            where custTable.CustGroup          == parameters.NewCarCustGroup
+               && custTable.PMINSRECChassisNum == _chassisNum;
+
+        if (custTable.AccountNum)
+        {
+            return custTable.AccountNum;
+        }
+
+        pattern = '*' + _chassisNum;
+
+        while select AccountNum from custTable
+            where custTable.CustGroup          == parameters.NewCarCustGroup
+               && custTable.PMINSRECChassisNum like pattern
+        {
+            found++;
+            custAccount = custTable.AccountNum;
+        }
+
+        return found == 1 ? custAccount : '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findReceipt</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Finds the open receipt (credit) on the fixed vendor whose text contains the registration number
+    /// and that is not used by another grid line.
+    /// </summary>
+    private VendTransOpen findReceipt(PMINSRECCardSettlement _settlement, VendAccount _fixedVendAccount)
+    {
+        VendTrans              vendTrans;
+        VendTransOpen          vendTransOpen;
+        PMINSRECCardSettlement usedBy;
+        str                    pattern = '*' + _settlement.RegistrationNo + '*';
+
+        select firstonly vendTransOpen
+            order by TransDate
+            where vendTransOpen.AccountNum == _fixedVendAccount
+               && vendTransOpen.AmountMST  <  0
+            exists join vendTrans
+                where vendTrans.RecId      == vendTransOpen.RefRecId
+                   && vendTrans.AccountNum == vendTransOpen.AccountNum
+                   && vendTrans.Txt        like pattern
+            notexists join usedBy
+                where usedBy.ReceiptVendTransRecId == vendTransOpen.RefRecId
+                   && usedBy.RecId                 != _settlement.RecId;
+
+        return vendTransOpen;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>setError</Name>
+				<Source><![CDATA[
+    private void setError(RecId _recId, int _infologStart)
+    {
+        PMINSRECCardSettlement settlement;
+
+        countError++;
+
+        ttsbegin;
+
+        settlement = PMINSRECCardSettlement::findRecId(_recId, true);
+
+        if (settlement)
+        {
+            settlement.Status    = PMINSRECStatus::Error;
+            settlement.ErrorText = PMINSRECProcessEngine::infologText(_infologStart);
+            settlement.update();
+        }
+
+        ttscommit;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>infologText</Name>
+				<Source><![CDATA[
+    public static str infologText(int _fromLine)
+    {
+        str text;
+        int line;
+
+        for (line = _fromLine + 1; line <= infologLine(); line++)
+        {
+            text += (text ? ' | ' : '') + infolog.text(line);
+        }
+
+        return text;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

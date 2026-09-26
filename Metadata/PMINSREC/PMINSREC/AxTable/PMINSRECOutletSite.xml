@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECOutletSite</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Maps the outlet code of the insurance portal (2009, 2051, ...) to an inventory site.
+/// </summary>
+public class PMINSRECOutletSite extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>find</Name>
+				<Source><![CDATA[
+    public static PMINSRECOutletSite find(PMINSRECOutletCode _outletCode, boolean _forupdate = false)
+    {
+        PMINSRECOutletSite outletSite;
+
+        if (_outletCode)
+        {
+            outletSite.selectForUpdate(_forupdate);
+
+            select firstonly outletSite
+                where outletSite.OutletCode == _outletCode;
+        }
+
+        return outletSite;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>siteId</Name>
+				<Source><![CDATA[
+    public static InventSiteId siteId(PMINSRECOutletCode _outletCode)
+    {
+        return PMINSRECOutletSite::find(_outletCode).InventSiteId;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:OutletSiteMapping</Label>
+	<TitleField1>OutletCode</TitleField1>
+	<TitleField2>InventSiteId</TitleField2>
+	<CacheLookup>Found</CacheLookup>
+	<ClusteredIndex>OutletIdx</ClusteredIndex>
+	<PrimaryIndex>OutletIdx</PrimaryIndex>
+	<ReplacementKey>OutletIdx</ReplacementKey>
+	<TableGroup>Group</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>OutletCode</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InventSiteId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Description</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>OutletCode</Name>
+			<ExtendedDataType>PMINSRECOutletCode</ExtendedDataType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>InventSiteId</Name>
+			<ExtendedDataType>InventSiteId</ExtendedDataType>
+			<Mandatory>Yes</Mandatory>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>Description</Name>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:Description</Label>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>OutletIdx</Name>
+			<AlternateKey>Yes</AlternateKey>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>OutletCode</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+		<AxTableRelation>
+			<Name>InventSite</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>InventSite</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>InventSiteId</Name>
+					<Field>InventSiteId</Field>
+					<RelatedField>SiteId</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+	</Relations>
+	<StateMachines />
+</AxTable>

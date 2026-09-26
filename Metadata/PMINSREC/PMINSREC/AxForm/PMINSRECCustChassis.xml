@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECCustChassis</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECCustChassis extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="">
+			<Source>
+				<Name>CustTable</Name>
+				<Methods>
+					<Method>
+						<Name>init</Name>
+						<Source><![CDATA[
+        public void init()
+        {
+            CustGroupId newCarGroup = PMINSRECParameters::find().NewCarCustGroup;
+
+            super();
+
+            if (newCarGroup)
+            {
+                this.queryBuildDataSource().addRange(fieldNum(CustTable, CustGroup)).value(queryValue(newCarGroup));
+            }
+        }
+
+]]></Source>
+					</Method>
+				</Methods>
+				<Fields />
+			</Source>
+		</DataSources>
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>CustTable</Name>
+			<Table>CustTable</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>AccountNum</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CustGroup</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PMINSRECChassisNum</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<AllowDelete>No</AllowDelete>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:NewCarCustomerChassisNumbers</Caption>
+		<DataSource xmlns="">CustTable</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_AccountNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>AccountNum</DataField>
+						<DataSource>CustTable</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_CustGroup</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CustGroup</DataField>
+						<DataSource>CustTable</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PMINSRECChassisNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PMINSRECChassisNum</DataField>
+						<DataSource>CustTable</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_Name</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataMethod>name</DataMethod>
+						<DataSource>CustTable</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>CustTable</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

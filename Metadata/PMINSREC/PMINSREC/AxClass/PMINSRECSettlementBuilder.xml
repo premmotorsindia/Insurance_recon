@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECSettlementBuilder</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Builds the reconciliation grid line of a request ID from its card lines.
+/// <list type="bullet">
+/// <item>Net amount = sum of DEBIT lines - sum of CREDIT lines of the request ID.</item>
+/// <item>Net amount &lt;= 0 : skipped (duplicate / reversed request).</item>
+/// <item>Net amount &gt; 0  : one line for the net amount, references from the latest DEBIT line.</item>
+/// <item>Request IDs starting with N are new car, R / S are renewal.</item>
+/// <item>Endorsement lines go to status Manual and are not posted automatically.</item>
+/// </list>
+/// </summary>
+public final class PMINSRECSettlementBuilder
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>rebuild</Name>
+				<Source><![CDATA[
+    public static void rebuild(PMINSRECCardBank _cardBank, PMINSRECRequestId _requestId, Filename _fileName = '')
+    {
+        PMINSRECCardImportLine importLine;
+        PMINSRECCardImportLine referenceLine;
+        PMINSRECCardSettlement settlement;
+        AmountMST              debitAmount, creditAmount, netAmount;
+        int                    lineCount;
+        boolean                hasDebit, hasEndorsement;
+
+        ttsbegin;
+
+        while select importLine
+            order by TransDate, TransTime, RecId
+            where importLine.CardBank  == _cardBank
+               && importLine.RequestId == _requestId
+        {
+            lineCount++;
+
+            if (strScan(strUpr(importLine.Description + ' ' + importLine.TransTypeText), 'ENDORSEMENT', 1, 200))
+            {
+                hasEndorsement = true;
+            }
+
+            if (importLine.DebitCredit == PMINSRECDebitCredit::Debit)
+            {
+                debitAmount += importLine.Amount;
+
+                // lines are ordered by date / time, so the last debit is the latest one
+                referenceLine.data(importLine);
+                hasDebit = true;
+            }
+            else
+            {
+                creditAmount += importLine.Amount;
+
+                if (!hasDebit)
+                {
+                    referenceLine.data(importLine);
+                }
+            }
+        }
+
+        netAmount  = debitAmount - creditAmount;
+        settlement = PMINSRECCardSettlement::find(_cardBank, _requestId, true);
+
+        if (settlement.JV1JournalNum)
+        {
+            // JV1 already exists for the old net amount: new card lines need a user decision
+            if (settlement.CardAmount != netAmount || settlement.LineCount != lineCount)
+            {
+                settlement.DebitAmount  = debitAmount;
+                settlement.CreditAmount = creditAmount;
+                settlement.LineCount    = lineCount;
+                settlement.Status       = PMINSRECStatus::Manual;
+                settlement.ErrorText    = strFmt("New card lines received after JV1 %1. JV1 amount %2, new net amount %3.",
+                    settlement.JV1JournalNum, settlement.CardAmount, netAmount);
+                settlement.update();
+            }
+
+            ttscommit;
+            return;
+        }
+
+        settlement.CardBank          = _cardBank;
+        settlement.RequestId         = _requestId;
+        settlement.InsuranceType     = PMINSRECSettlementBuilder::insuranceType(_requestId);
+        settlement.TransDate         = referenceLine.TransDate;
+        settlement.TransactionId     = referenceLine.TransactionId;
+        settlement.BankTransactionId = referenceLine.BankTransactionId;
+        settlement.InsuranceCompany  = referenceLine.InsuranceCompany;
+        settlement.PolicyNo          = referenceLine.PolicyNo;
+        settlement.CustomerName      = referenceLine.CustomerName;
+        settlement.RegistrationNo    = referenceLine.RegistrationNo == 'NEW' ? '' : referenceLine.RegistrationNo;
+        settlement.OutletCode        = referenceLine.OutletCode;
+        settlement.DebitAmount       = debitAmount;
+        settlement.CreditAmount      = creditAmount;
+        settlement.CardAmount        = netAmount;
+        settlement.LineCount         = lineCount;
+        settlement.HasEndorsement    = hasEndorsement ? NoYes::Yes : NoYes::No;
+        settlement.ErrorText         = '';
+
+        if (_fileName)
+        {
+            settlement.FileName = _fileName;
+        }
+
+        if (netAmount <= 0)
+        {
+            settlement.Status    = PMINSRECStatus::NetZeroSkipped;
+            settlement.ErrorText = strFmt("Debit %1 - credit %2 = %3. Not processed.", debitAmount, creditAmount, netAmount);
+        }
+        else if (hasEndorsement && !settlement.ManualReleased)
+        {
+            settlement.Status    = PMINSRECStatus::Manual;
+            settlement.ErrorText = "Endorsement line: review and use Release manual line to process.";
+        }
+        else if (settlement.InsuranceType == PMINSRECInsuranceType::None)
+        {
+            settlement.Status    = PMINSRECStatus::Error;
+            settlement.ErrorText = "Request ID must start with N (new car) or R / S (renewal).";
+        }
+        else
+        {
+            settlement.Status = PMINSRECStatus::Draft;
+        }
+
+        PMINSRECSettlementBuilder::enrich(settlement);
+
+        settlement.write();
+
+        ttscommit;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>insuranceType</Name>
+				<Source><![CDATA[
+    public static PMINSRECInsuranceType insuranceType(PMINSRECRequestId _requestId)
+    {
+        switch (strUpr(subStr(_requestId, 1, 1)))
+        {
+            case 'N':
+                return PMINSRECInsuranceType::NewCar;
+
+            case 'R':
+            case 'S':
+                return PMINSRECInsuranceType::Renewal;
+        }
+
+        return PMINSRECInsuranceType::None;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>enrich</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Copies the supporting data of the individual report (matched on proposal number = request ID)
+    /// and derives the site from the outlet code.
+    /// </summary>
+    public static void enrich(PMINSRECCardSettlement _settlement)
+    {
+        PMINSRECIndividualReport report = PMINSRECIndividualReport::find(_settlement.RequestId);
+
+        if (report)
+        {
+            _settlement.IndividualReportFound = NoYes::Yes;
+            _settlement.DlrExecutive          = report.DlrExecutive;
+            _settlement.ICName                = report.ICName;
+            _settlement.FreeIns               = report.FreeIns;
+            _settlement.PolicyType            = report.PolicyType;
+            _settlement.ChassisNum            = report.ChassisNo;
+            _settlement.EngineNum             = report.EngineNo;
+
+            if (!_settlement.PolicyNo)
+            {
+                _settlement.PolicyNo = report.PolicyNo;
+            }
+
+            if (!_settlement.RegistrationNo)
+            {
+                _settlement.RegistrationNo = report.RegnNo;
+            }
+
+            if (!_settlement.InsuranceCompany)
+            {
+                _settlement.InsuranceCompany = report.ICName;
+            }
+        }
+
+        _settlement.InventSiteId = PMINSRECOutletSite::siteId(_settlement.OutletCode);
+        _settlement.Narration    = PMINSRECSettlementBuilder::narration(_settlement);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>narration</Name>
+				<Source><![CDATA[
+    public static str narration(PMINSRECCardSettlement _settlement)
+    {
+        str vehicle = _settlement.InsuranceType == PMINSRECInsuranceType::NewCar
+            ? _settlement.ChassisNum
+            : _settlement.RegistrationNo;
+
+        return strLRTrim(strFmt('%1 %2 %3 %4 TC:%5',
+            _settlement.CardBank,
+            _settlement.RequestId,
+            vehicle,
+            _settlement.ICName ? _settlement.ICName : _settlement.InsuranceCompany,
+            _settlement.DlrExecutive));
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

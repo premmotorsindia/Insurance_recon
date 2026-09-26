@@ -1,0 +1,359 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECFileReader</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+using OfficeOpenXml;
+
+/// <summary>
+/// Reads an uploaded .xlsx (first worksheet) or .csv file into a list of rows.
+/// Every row is a <c>Map</c> of upper-cased column header -> cell text.
+/// </summary>
+public final class PMINSRECFileReader
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>readRows</Name>
+				<Source><![CDATA[
+    public static List readRows(System.IO.Stream _stream, Filename _fileName)
+    {
+        str extension = strLwr(System.IO.Path::GetExtension(_fileName));
+
+        if (extension == '.csv' || extension == '.txt')
+        {
+            return PMINSRECFileReader::readCsv(_stream);
+        }
+
+        return PMINSRECFileReader::readExcel(_stream);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>readExcel</Name>
+				<Source><![CDATA[
+    private static List readExcel(System.IO.Stream _stream)
+    {
+        List              rows = new List(Types::Class);
+        ExcelWorksheet    worksheet;
+        ExcelRange        cells;
+        container         headers;
+        Map               values;
+        str               value;
+        boolean           hasData;
+        int               lastRow, lastCol, row, col;
+
+        using (ExcelPackage package = new ExcelPackage(_stream))
+        {
+            worksheet = package.get_Workbook().get_Worksheets().get_Item(1);
+
+            if (worksheet == null || worksheet.get_Dimension() == null)
+            {
+                return rows;
+            }
+
+            lastRow = worksheet.get_Dimension().get_End().get_Row();
+            lastCol = worksheet.get_Dimension().get_End().get_Column();
+            cells   = worksheet.get_Cells();
+
+            for (col = 1; col <= lastCol; col++)
+            {
+                headers += PMINSRECFileReader::normalizeHeader(cells.get_Item(1, col).get_Text());
+            }
+
+            for (row = 2; row <= lastRow; row++)
+            {
+                values  = new Map(Types::String, Types::String);
+                hasData = false;
+
+                for (col = 1; col <= lastCol; col++)
+                {
+                    if (conPeek(headers, col))
+                    {
+                        value = PMINSRECFileReader::cleanValue(cells.get_Item(row, col).get_Text());
+                        values.insert(conPeek(headers, col), value);
+                        hasData = hasData || value != '';
+                    }
+                }
+
+                if (hasData)
+                {
+                    rows.addEnd(values);
+                }
+            }
+        }
+
+        return rows;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>readCsv</Name>
+				<Source><![CDATA[
+    private static List readCsv(System.IO.Stream _stream)
+    {
+        List                    rows = new List(Types::Class);
+        System.IO.StreamReader  reader = new System.IO.StreamReader(_stream);
+        container               headers, fields;
+        Map                     values;
+        str                     textLine, value;
+        boolean                 headerRead, hasData;
+        int                     col;
+
+        while (!reader.get_EndOfStream())
+        {
+            textLine = reader.ReadLine();
+
+            if (!strLRTrim(textLine))
+            {
+                continue;
+            }
+
+            fields = PMINSRECFileReader::splitCsvLine(textLine);
+
+            if (!headerRead)
+            {
+                for (col = 1; col <= conLen(fields); col++)
+                {
+                    headers += PMINSRECFileReader::normalizeHeader(conPeek(fields, col));
+                }
+                headerRead = true;
+                continue;
+            }
+
+            values  = new Map(Types::String, Types::String);
+            hasData = false;
+
+            for (col = 1; col <= conLen(headers) && col <= conLen(fields); col++)
+            {
+                if (conPeek(headers, col))
+                {
+                    value = PMINSRECFileReader::cleanValue(conPeek(fields, col));
+                    values.insert(conPeek(headers, col), value);
+                    hasData = hasData || value != '';
+                }
+            }
+
+            if (hasData)
+            {
+                rows.addEnd(values);
+            }
+        }
+
+        return rows;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>splitCsvLine</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Splits one CSV line; supports quoted values containing commas and doubled quotes.
+    /// </summary>
+    public static container splitCsvLine(str _line)
+    {
+        container fields;
+        str       current, ch;
+        boolean   inQuotes;
+        int       len = strLen(_line);
+        int       pos;
+
+        for (pos = 1; pos <= len; pos++)
+        {
+            ch = subStr(_line, pos, 1);
+
+            if (ch == '"')
+            {
+                if (inQuotes && pos < len && subStr(_line, pos + 1, 1) == '"')
+                {
+                    current += '"';
+                    pos++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+            }
+            else if (ch == ',' && !inQuotes)
+            {
+                fields  += current;
+                current  = '';
+            }
+            else
+            {
+                current += ch;
+            }
+        }
+
+        fields += current;
+
+        return fields;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>normalizeHeader</Name>
+				<Source><![CDATA[
+    public static str normalizeHeader(str _header)
+    {
+        return strUpr(PMINSRECFileReader::cleanValue(_header));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>cleanValue</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Trims the value and removes the leading apostrophe the insurance portal puts before numbers
+    /// (e.g. <c>'N00010966859 </c>).
+    /// </summary>
+    public static str cleanValue(str _value)
+    {
+        str value = strLRTrim(_value);
+
+        if (strLen(value) > 0 && subStr(value, 1, 1) == "'")
+        {
+            value = strLRTrim(subStr(value, 2, strLen(value) - 1));
+        }
+
+        return value;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>value</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Returns the cell value of a row for the given column header ('' when the column does not exist).
+    /// </summary>
+    public static str value(Map _row, str _columnName)
+    {
+        str key = PMINSRECFileReader::normalizeHeader(_columnName);
+
+        return key && _row.exists(key) ? _row.lookup(key) : '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parseAmount</Name>
+				<Source><![CDATA[
+    public static real parseAmount(str _value)
+    {
+        str value = strRem(strLRTrim(_value), ',');
+
+        return value ? str2Num(value) : 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parseDate</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Parses the date formats used by the card files and the portal:
+    /// 25/09/2026 10:04:09 (ICICI), 2026-09-23 12:57:10.0 (HSBC) and 25-Sep-2026 (individual report).
+    /// </summary>
+    public static date parseDate(str _value)
+    {
+        container months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        str       datePart = strLRTrim(_value);
+        container parts;
+        int       spacePos = strScan(datePart, ' ', 1, strLen(datePart));
+        int       day, month, year;
+
+        if (spacePos)
+        {
+            datePart = subStr(datePart, 1, spacePos - 1);
+        }
+
+        if (!datePart)
+        {
+            return dateNull();
+        }
+
+        if (strScan(datePart, '/', 1, strLen(datePart)))
+        {
+            parts = str2con(datePart, '/', false);
+            day   = str2Int(conPeek(parts, 1));
+            month = str2Int(conPeek(parts, 2));
+            year  = str2Int(conPeek(parts, 3));
+        }
+        else if (strScan(datePart, '-', 1, strLen(datePart)))
+        {
+            parts = str2con(datePart, '-', false);
+
+            if (strLen(conPeek(parts, 1)) == 4)
+            {
+                year  = str2Int(conPeek(parts, 1));
+                month = str2Int(conPeek(parts, 2));
+                day   = str2Int(conPeek(parts, 3));
+            }
+            else
+            {
+                day   = str2Int(conPeek(parts, 1));
+                month = conFind(months, strUpr(subStr(conPeek(parts, 2), 1, 3)));
+                if (!month)
+                {
+                    month = str2Int(conPeek(parts, 2));
+                }
+                year  = str2Int(conPeek(parts, 3));
+            }
+        }
+        else
+        {
+            return str2Date(datePart, 123);
+        }
+
+        if (year < 100)
+        {
+            year += 2000;
+        }
+
+        return (day && month && year) ? mkDate(day, month, year) : dateNull();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parseTime</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Returns the time part (seconds since midnight) of values like 25/09/2026 10:04:09.
+    /// </summary>
+    public static TimeOfDay parseTime(str _value)
+    {
+        str       value    = strLRTrim(_value);
+        int       spacePos = strScan(value, ' ', 1, strLen(value));
+        container parts;
+
+        if (!spacePos)
+        {
+            return 0;
+        }
+
+        parts = str2con(subStr(value, spacePos + 1, strLen(value)), ':', false);
+
+        if (conLen(parts) < 2)
+        {
+            return 0;
+        }
+
+        return str2Int(conPeek(parts, 1)) * 3600
+             + str2Int(conPeek(parts, 2)) * 60
+             + (conLen(parts) > 2 ? str2Int(subStr(conPeek(parts, 3), 1, 2)) : 0);
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

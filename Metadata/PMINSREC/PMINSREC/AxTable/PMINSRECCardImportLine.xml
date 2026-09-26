@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECCardImportLine</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Raw line of an uploaded ICICI / HDFC / HSBC card file.
+/// </summary>
+public class PMINSRECCardImportLine extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>isDuplicate</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Checks whether the same card line was already uploaded (same file uploaded twice).
+    /// </summary>
+    public boolean isDuplicate()
+    {
+        PMINSRECCardImportLine existing;
+
+        if (this.TransactionId)
+        {
+            select firstonly RecId from existing
+                where existing.CardBank      == this.CardBank
+                   && existing.TransactionId == this.TransactionId
+                   && existing.RequestId     == this.RequestId
+                   && existing.DebitCredit   == this.DebitCredit;
+        }
+        else
+        {
+            select firstonly RecId from existing
+                where existing.CardBank      == this.CardBank
+                   && existing.RequestId     == this.RequestId
+                   && existing.DebitCredit   == this.DebitCredit
+                   && existing.Amount        == this.Amount
+                   && existing.TransDate     == this.TransDate
+                   && existing.TransTime     == this.TransTime;
+        }
+
+        return existing.RecId != 0;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:CardFileLine</Label>
+	<TitleField1>RequestId</TitleField1>
+	<TitleField2>TransactionId</TitleField2>
+	<CreatedBy>Yes</CreatedBy>
+	<CreatedDateTime>Yes</CreatedDateTime>
+	<TableGroup>Transaction</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>CardBank</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RequestId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DebitCredit</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Amount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>TransDate</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>TransTime</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>TransactionId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>BankTransactionId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InsuranceCompany</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PolicyNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CustomerName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RegistrationNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>OutletCode</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>TransTypeText</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Description</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RefundInitiated</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>FileName</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>CardBank</Name>
+			<AllowEdit>No</AllowEdit>
+			<EnumType>PMINSRECCardBank</EnumType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RequestId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECRequestId</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>DebitCredit</Name>
+			<AllowEdit>No</AllowEdit>
+			<EnumType>PMINSRECDebitCredit</EnumType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>Amount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldDate">
+			<Name>TransDate</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>TransDate</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldTime">
+			<Name>TransTime</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>TimeOfDay</ExtendedDataType>
+			<Label>@PMINSREC:TransactionTime</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>TransDateText</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:TransactionDateFile</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ProposalReceiptDate</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:ProposalReceiptingDate</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>TransactionId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECTransactionId</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>BankTransactionId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECTransactionId</ExtendedDataType>
+			<Label>@PMINSREC:BankTransactionId</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>InsuranceCompany</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:InsuranceCompany</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PolicyNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECPolicyNo</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>CustomerName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:CustomerName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RegistrationNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECRegistrationNo</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>OutletCode</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECOutletCode</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>TransTypeText</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:TransactionTypeFile</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>Description</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:Description</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RefundInitiated</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:RefundInitiated</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>FileName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECFileName</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldInt64">
+			<Name>ImportLogRecId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>RefRecId</ExtendedDataType>
+			<Label>@PMINSREC:ImportLog</Label>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>RequestIdx</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>CardBank</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>RequestId</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>TransactionIdx</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>CardBank</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>TransactionId</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+		<AxTableRelation>
+			<Name>Settlement</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>PMINSRECCardSettlement</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>CardBank</Name>
+					<Field>CardBank</Field>
+					<RelatedField>CardBank</RelatedField>
+				</AxTableRelationConstraint>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>RequestId</Name>
+					<Field>RequestId</Field>
+					<RelatedField>RequestId</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>ImportLog</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>PMINSRECImportLog</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>ImportLogRecId</Name>
+					<Field>ImportLogRecId</Field>
+					<RelatedField>RecId</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+	</Relations>
+	<StateMachines />
+</AxTable>

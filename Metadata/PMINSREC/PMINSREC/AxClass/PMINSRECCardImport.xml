@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECCardImport</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Uploads an ICICI / HDFC / HSBC card file into the card lines, rebuilds the reconciliation grid
+/// for every request ID in the file and immediately creates JV1 (Vendor payable Dr / Card bank Cr).
+/// </summary>
+public final class PMINSRECCardImport
+{
+    PMINSRECCardBank cardBank;
+    Map              columns;
+    Set              requestIds;
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    public static void main(Args _args)
+    {
+        Dialog                           dialog = new Dialog("Upload card file");
+        DialogField                      cardBankField;
+        FileUploadTemporaryStorageResult uploadResult;
+        PMINSRECCardImport               import;
+
+        cardBankField = dialog.addField(enumStr(PMINSRECCardBank), "Card bank");
+
+        if (!dialog.run())
+        {
+            return;
+        }
+
+        uploadResult = PMINSRECFormHelper::uploadFile();
+
+        if (uploadResult)
+        {
+            import = PMINSRECCardImport::construct(cardBankField.value());
+
+            using (System.IO.Stream stream = uploadResult.openResult())
+            {
+                import.importFile(stream, uploadResult.getFileName());
+            }
+
+            // JV1 is created immediately after the upload
+            PMINSRECProcessEngine::construct().run();
+        }
+
+        PMINSRECFormHelper::refreshCaller(_args);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>construct</Name>
+				<Source><![CDATA[
+    public static PMINSRECCardImport construct(PMINSRECCardBank _cardBank)
+    {
+        PMINSRECCardImport import = new PMINSRECCardImport();
+
+        import.parmCardBank(_cardBank);
+
+        return import;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parmCardBank</Name>
+				<Source><![CDATA[
+    public PMINSRECCardBank parmCardBank(PMINSRECCardBank _cardBank = cardBank)
+    {
+        cardBank = _cardBank;
+        return cardBank;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>importFile</Name>
+				<Source><![CDATA[
+    public void importFile(System.IO.Stream _stream, Filename _fileName)
+    {
+        List                   rows;
+        ListEnumerator         rowEnumerator;
+        SetEnumerator          requestEnumerator;
+        PMINSRECCardImportLine importLine;
+        PMINSRECImportLog      importLog;
+
+        columns = PMINSRECFileFormat::columnMap(cardBank);
+
+        if (!columns.exists(PMINSRECCardField::RequestId) || !columns.exists(PMINSRECCardField::Amount))
+        {
+            throw error(strFmt("Column mapping for card bank %1 is not set up (Request ID and Amount are mandatory).", cardBank));
+        }
+
+        rows       = PMINSRECFileReader::readRows(_stream, _fileName);
+        requestIds = new Set(Types::String);
+
+        ttsbegin;
+
+        importLog.ImportType = PMINSRECImportType::CardFile;
+        importLog.CardBank   = cardBank;
+        importLog.FileName   = _fileName;
+        importLog.insert();
+
+        rowEnumerator = rows.getEnumerator();
+
+        while (rowEnumerator.moveNext())
+        {
+            importLog.RowsRead++;
+
+            importLine = this.initLine(rowEnumerator.current());
+            importLine.FileName       = _fileName;
+            importLine.ImportLogRecId = importLog.RecId;
+
+            if (!importLine.RequestId || !importLine.Amount)
+            {
+                importLog.RowsSkipped++;
+                continue;
+            }
+
+            if (importLine.isDuplicate())
+            {
+                importLog.RowsDuplicate++;
+                continue;
+            }
+
+            importLine.insert();
+            importLog.RowsInserted++;
+            requestIds.add(importLine.RequestId);
+        }
+
+        importLog.update();
+
+        ttscommit;
+
+        requestEnumerator = requestIds.getEnumerator();
+
+        while (requestEnumerator.moveNext())
+        {
+            PMINSRECSettlementBuilder::rebuild(cardBank, requestEnumerator.current(), _fileName);
+        }
+
+        info(strFmt("%1: %2 rows read, %3 inserted, %4 duplicate, %5 skipped. %6 request IDs updated.",
+            _fileName, importLog.RowsRead, importLog.RowsInserted, importLog.RowsDuplicate,
+            importLog.RowsSkipped, requestIds.elements()));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>initLine</Name>
+				<Source><![CDATA[
+    private PMINSRECCardImportLine initLine(Map _row)
+    {
+        PMINSRECCardImportLine importLine;
+        str                    transType;
+        real                   signedAmount;
+
+        importLine.CardBank            = cardBank;
+        importLine.RequestId           = this.field(_row, PMINSRECCardField::RequestId);
+        importLine.TransDateText       = this.field(_row, PMINSRECCardField::TransDate);
+        importLine.ProposalReceiptDate = this.field(_row, PMINSRECCardField::ProposalReceiptDate);
+        importLine.TransactionId       = this.field(_row, PMINSRECCardField::TransactionId);
+        importLine.BankTransactionId   = this.field(_row, PMINSRECCardField::BankTransactionId);
+        importLine.InsuranceCompany    = this.field(_row, PMINSRECCardField::InsuranceCompany);
+        importLine.PolicyNo            = this.field(_row, PMINSRECCardField::PolicyNo);
+        importLine.CustomerName        = this.field(_row, PMINSRECCardField::CustomerName);
+        importLine.RegistrationNo      = strUpr(strRem(this.field(_row, PMINSRECCardField::RegistrationNo), ' '));
+        importLine.OutletCode          = this.field(_row, PMINSRECCardField::OutletCode);
+        importLine.TransTypeText       = this.field(_row, PMINSRECCardField::TransType);
+        importLine.Description         = this.field(_row, PMINSRECCardField::Description);
+        importLine.RefundInitiated     = this.field(_row, PMINSRECCardField::RefundInitiated);
+
+        // Transaction date is blank on some credit lines: fall back to the proposal receipting date
+        if (!importLine.TransDateText)
+        {
+            importLine.TransDateText = importLine.ProposalReceiptDate;
+        }
+        importLine.TransDate = PMINSRECFileReader::parseDate(importLine.TransDateText);
+        importLine.TransTime = PMINSRECFileReader::parseTime(importLine.TransDateText);
+
+        // ICICI: DEBIT / CREDIT with positive amount. HSBC: DEBIT/Debit/Invoice with negative amount.
+        signedAmount = PMINSRECFileReader::parseAmount(this.field(_row, PMINSRECCardField::Amount));
+        transType    = strUpr(importLine.TransTypeText);
+
+        if (strStartsWith(transType, 'CREDIT'))
+        {
+            importLine.DebitCredit = PMINSRECDebitCredit::Credit;
+        }
+        else if (strStartsWith(transType, 'DEBIT'))
+        {
+            importLine.DebitCredit = PMINSRECDebitCredit::Debit;
+        }
+        else
+        {
+            importLine.DebitCredit = signedAmount < 0 ? PMINSRECDebitCredit::Debit : PMINSRECDebitCredit::Credit;
+        }
+
+        importLine.Amount = abs(signedAmount);
+
+        return importLine;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>field</Name>
+				<Source><![CDATA[
+    private str field(Map _row, PMINSRECCardField _cardField)
+    {
+        return columns.exists(_cardField) ? PMINSRECFileReader::value(_row, columns.lookup(_cardField)) : '';
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECImportLog</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECImportLog extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECImportLog</Name>
+			<Table>PMINSRECImportLog</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>CreatedDateTime</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ImportType</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CardBank</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ReportType</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FileName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RowsRead</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RowsInserted</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RowsDuplicate</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RowsSkipped</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CreatedBy</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<AllowEdit>No</AllowEdit>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:ImportLog</Caption>
+		<DataSource xmlns="">PMINSRECImportLog</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormDateTimeControl">
+						<Name>Grid_CreatedDateTime</Name>
+						<Type>DateTime</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CreatedDateTime</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_ImportType</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ImportType</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_CardBank</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardBank</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_ReportType</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ReportType</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FileName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FileName</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_RowsRead</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RowsRead</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_RowsInserted</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RowsInserted</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_RowsDuplicate</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RowsDuplicate</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_RowsSkipped</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RowsSkipped</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_CreatedBy</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CreatedBy</DataField>
+						<DataSource>PMINSRECImportLog</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECImportLog</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECPostingSetup</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECPostingSetup extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECPostingSetup</Name>
+			<Table>PMINSRECPostingSetup</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>CardBank</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InsuranceType</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InventSiteId</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JournalNameJV1</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JournalNameJV2</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PayableVendAccount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>BankAccountId</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FixedVendAccount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DiffAccountType</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DiffAccountNum</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>Description</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:CardSettlementPostingSetup</Caption>
+		<DataSource xmlns="">PMINSRECPostingSetup</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_CardBank</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardBank</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_InsuranceType</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InsuranceType</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_InventSiteId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InventSiteId</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_JournalNameJV1</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JournalNameJV1</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_JournalNameJV2</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JournalNameJV2</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PayableVendAccount</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PayableVendAccount</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_BankAccountId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>BankAccountId</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FixedVendAccount</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FixedVendAccount</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_DiffAccountType</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DiffAccountType</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_DiffAccountNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DiffAccountNum</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_Description</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Description</DataField>
+						<DataSource>PMINSRECPostingSetup</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECPostingSetup</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

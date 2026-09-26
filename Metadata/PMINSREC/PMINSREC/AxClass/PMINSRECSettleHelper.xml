@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECSettleHelper</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Settles open vendor transactions against each other (JV1 debit with JV2 credit on the vendor payable,
+/// renewal receipt credit with the JV2 debit on the fixed vendor).
+/// </summary>
+public final class PMINSRECSettleHelper
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>vendTransOfVoucher</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Adds the RecIds of the vendor transactions of a voucher and vendor to the set.
+    /// </summary>
+    public static void vendTransOfVoucher(Set _recIds, VendAccount _vendAccount, Voucher _voucher, TransDate _transDate)
+    {
+        VendTrans vendTrans;
+
+        while select RecId from vendTrans
+            where vendTrans.AccountNum == _vendAccount
+               && vendTrans.Voucher    == _voucher
+               && vendTrans.TransDate  == _transDate
+        {
+            _recIds.add(vendTrans.RecId);
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>settleVendTrans</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Marks the open amounts of the given vendor transactions and settles them.
+    /// </summary>
+    /// <returns>true when at least two open transactions were marked and settled.</returns>
+    public static boolean settleVendTrans(VendAccount _vendAccount, Set _vendTransRecIds)
+    {
+        VendTable                 vendTable = VendTable::find(_vendAccount);
+        SpecTransExecutionContext specTransExecutionContext;
+        SpecTransManager          specTransManager;
+        SetEnumerator             enumerator = _vendTransRecIds.getEnumerator();
+        VendTransOpen             vendTransOpen;
+        VendTrans                 vendTrans;
+        int                       marked;
+
+        if (!vendTable)
+        {
+            return false;
+        }
+
+        specTransExecutionContext = SpecTransExecutionContext::newFromSource(vendTable);
+        specTransManager          = SpecTransManager::newFromSpec(specTransExecutionContext.parmSpecContext());
+
+        while (enumerator.moveNext())
+        {
+            vendTrans = VendTrans::find(enumerator.current());
+
+            while select vendTransOpen
+                where vendTransOpen.RefRecId   == vendTrans.RecId
+                   && vendTransOpen.AccountNum == vendTrans.AccountNum
+            {
+                if (vendTransOpen.AmountCur)
+                {
+                    specTransManager.insert(vendTransOpen.DataAreaId, vendTransOpen.TableId, vendTransOpen.RecId,
+                        vendTransOpen.AmountCur, vendTrans.CurrencyCode);
+                    marked++;
+                }
+            }
+        }
+
+        if (marked < 2)
+        {
+            specTransManager.deleteAll();
+            return false;
+        }
+
+        VendTrans::settleTransaction(specTransExecutionContext, VendTransSettleTransactionParameters::construct());
+
+        return true;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

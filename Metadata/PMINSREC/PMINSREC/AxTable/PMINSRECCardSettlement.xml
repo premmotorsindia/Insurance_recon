@@ -1,0 +1,622 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECCardSettlement</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Reconciliation grid: one line per card bank and request ID (net of all card lines).
+/// </summary>
+public class PMINSRECCardSettlement extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>find</Name>
+				<Source><![CDATA[
+    public static PMINSRECCardSettlement find(
+        PMINSRECCardBank  _cardBank,
+        PMINSRECRequestId _requestId,
+        boolean           _forupdate = false)
+    {
+        PMINSRECCardSettlement settlement;
+
+        settlement.selectForUpdate(_forupdate);
+
+        select firstonly settlement
+            where settlement.CardBank  == _cardBank
+               && settlement.RequestId == _requestId;
+
+        return settlement;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findRecId</Name>
+				<Source><![CDATA[
+    public static PMINSRECCardSettlement findRecId(RecId _recId, boolean _forupdate = false)
+    {
+        PMINSRECCardSettlement settlement;
+
+        settlement.selectForUpdate(_forupdate);
+
+        select firstonly settlement
+            where settlement.RecId == _recId;
+
+        return settlement;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isOpenForProcessing</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Lines that are skipped (net zero) or waiting for a user decision are not processed.
+    /// </summary>
+    public boolean isOpenForProcessing()
+    {
+        return this.Status != PMINSRECStatus::NetZeroSkipped
+            && this.Status != PMINSRECStatus::Manual
+            && this.Status != PMINSRECStatus::Completed;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:CardSettlement</Label>
+	<TitleField1>RequestId</TitleField1>
+	<TitleField2>RegistrationNo</TitleField2>
+	<CreatedBy>Yes</CreatedBy>
+	<CreatedDateTime>Yes</CreatedDateTime>
+	<ClusteredIndex>RequestIdx</ClusteredIndex>
+	<PrimaryIndex>RequestIdx</PrimaryIndex>
+	<ReplacementKey>RequestIdx</ReplacementKey>
+	<TableGroup>Transaction</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>CardBank</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RequestId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InsuranceType</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Status</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>TransDate</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>TransactionId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>BankTransactionId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InsuranceCompany</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ICName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PolicyNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PolicyType</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CustomerName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RegistrationNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ChassisNum</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>EngineNum</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>OutletCode</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InventSiteId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DlrExecutive</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>FreeIns</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>IndividualReportFound</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>LineCount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>HasEndorsement</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DebitAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CreditAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CardAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>InsuranceReceivedAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DifferenceAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PayableVendAccount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>BankAccountId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CustAccount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ReceiptVendAccount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ReceiptVoucher</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ReceiptVendTransRecId</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JV1JournalNum</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JV1Voucher</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JV1Posted</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JV2JournalNum</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JV2Voucher</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>JV2Posted</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Settled</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ManualReleased</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>Narration</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ErrorText</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>FileName</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>CardBank</Name>
+			<AllowEdit>No</AllowEdit>
+			<EnumType>PMINSRECCardBank</EnumType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RequestId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECRequestId</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>InsuranceType</Name>
+			<AllowEdit>No</AllowEdit>
+			<EnumType>PMINSRECInsuranceType</EnumType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>Status</Name>
+			<AllowEdit>No</AllowEdit>
+			<EnumType>PMINSRECStatus</EnumType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldDate">
+			<Name>TransDate</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>TransDate</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>TransactionId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECTransactionId</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>BankTransactionId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECTransactionId</ExtendedDataType>
+			<Label>@PMINSREC:BankTransactionId</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>InsuranceCompany</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:InsuranceCompany</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ICName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:IcName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PolicyNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECPolicyNo</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PolicyType</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:PolicyType</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>CustomerName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:CustomerName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RegistrationNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECRegistrationNo</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ChassisNum</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECChassisNum</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>EngineNum</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECEngineNum</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>OutletCode</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECOutletCode</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>InventSiteId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>InventSiteId</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>DlrExecutive</Name>
+			<ExtendedDataType>PMINSRECDlrExecutive</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>FreeIns</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:FreeInsurance</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>IndividualReportFound</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:IndividualReportFound</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldInt">
+			<Name>LineCount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>Counter</ExtendedDataType>
+			<Label>@PMINSREC:CardLines</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>HasEndorsement</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:Endorsement</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>DebitAmount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:DebitAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>CreditAmount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:CreditAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>CardAmount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:CardAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>InsuranceReceivedAmount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:InsuranceReceivedAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>DifferenceAmount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:DifferenceAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PayableVendAccount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>VendAccount</ExtendedDataType>
+			<Label>@PMINSREC:VendorPayableAccount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>BankAccountId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>CompanyBankAccountId</ExtendedDataType>
+			<Label>@PMINSREC:CardBankAccount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>CustAccount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>CustAccount</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ReceiptVendAccount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>VendAccount</ExtendedDataType>
+			<Label>@PMINSREC:ReceiptVendor</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ReceiptVoucher</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>Voucher</ExtendedDataType>
+			<Label>@PMINSREC:ReceiptVoucher</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldInt64">
+			<Name>ReceiptVendTransRecId</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>RefRecId</ExtendedDataType>
+			<Label>@PMINSREC:ReceiptTransaction</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>JV1JournalNum</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>LedgerJournalId</ExtendedDataType>
+			<Label>@PMINSREC:Jv1Journal</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>JV1Voucher</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>Voucher</ExtendedDataType>
+			<Label>@PMINSREC:Jv1Voucher</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>JV1Posted</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:Jv1Posted</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>JV2JournalNum</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>LedgerJournalId</ExtendedDataType>
+			<Label>@PMINSREC:Jv2Journal</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>JV2Voucher</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>Voucher</ExtendedDataType>
+			<Label>@PMINSREC:Jv2Voucher</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>JV2Posted</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:Jv2Posted</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>Settled</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:Settled</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>ManualReleased</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>NoYesId</ExtendedDataType>
+			<EnumType>NoYes</EnumType>
+			<Label>@PMINSREC:ManuallyReleased</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>Narration</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText255</ExtendedDataType>
+			<Label>@PMINSREC:Narration</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ErrorText</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText255</ExtendedDataType>
+			<Label>@PMINSREC:Message</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>FileName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECFileName</ExtendedDataType>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>RequestIdx</Name>
+			<AlternateKey>Yes</AlternateKey>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>CardBank</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>RequestId</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>StatusIdx</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>Status</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>TransDate</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>RegistrationIdx</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>RegistrationNo</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+		<AxTableRelation>
+			<Name>CustTable</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>CustTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>CustAccount</Name>
+					<Field>CustAccount</Field>
+					<RelatedField>AccountNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>PayableVendTable</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>VendTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>PayableVendAccount</Name>
+					<Field>PayableVendAccount</Field>
+					<RelatedField>AccountNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>ReceiptVendTable</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>VendTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>ReceiptVendAccount</Name>
+					<Field>ReceiptVendAccount</Field>
+					<RelatedField>AccountNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>InventSite</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>InventSite</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>InventSiteId</Name>
+					<Field>InventSiteId</Field>
+					<RelatedField>SiteId</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>JV1Journal</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>LedgerJournalTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>JV1JournalNum</Name>
+					<Field>JV1JournalNum</Field>
+					<RelatedField>JournalNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>JV2Journal</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>LedgerJournalTable</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>JV2JournalNum</Name>
+					<Field>JV2JournalNum</Field>
+					<RelatedField>JournalNum</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+		<AxTableRelation>
+			<Name>ReceiptVendTrans</Name>
+			<Cardinality>ZeroMore</Cardinality>
+			<RelatedTable>VendTrans</RelatedTable>
+			<RelatedTableCardinality>ZeroOne</RelatedTableCardinality>
+			<RelationshipType>Association</RelationshipType>
+			<Constraints>
+				<AxTableRelationConstraint xmlns="" i:type="AxTableRelationConstraintField">
+					<Name>ReceiptVendTransRecId</Name>
+					<Field>ReceiptVendTransRecId</Field>
+					<RelatedField>RecId</RelatedField>
+				</AxTableRelationConstraint>
+			</Constraints>
+		</AxTableRelation>
+	</Relations>
+	<StateMachines />
+</AxTable>

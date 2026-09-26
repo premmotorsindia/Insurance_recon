@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECIndividualReport</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECIndividualReport extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECIndividualReport</Name>
+			<Table>PMINSRECIndividualReport</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>ReportType</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ProposalNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PolicyNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PolicyType</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PolicyIssueDate</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ICName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>GrossPremium</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FreeIns</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CustName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>OutletName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RegnNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>EngineNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ChassisNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DealerOutletCity</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DlrExecutive</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RDInstrumentNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RInstBankName</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RDInstrumentDate</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RDInstrumentAmount</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>OutletDepositNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>MulDepositNo</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PaymentDate</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FileName</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<AllowEdit>No</AllowEdit>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:InsurancePortalIndividualReport</Caption>
+		<DataSource xmlns="">PMINSRECIndividualReport</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+				<Name>ActionPane</Name>
+				<Type>ActionPane</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+						<Name>ActionPaneTab</Name>
+						<Type>ActionPaneTab</Type>
+						<FormControlExtension i:nil="true" />
+						<Controls>
+							<AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+								<Name>ButtonGroup</Name>
+								<Type>ButtonGroup</Type>
+								<FormControlExtension i:nil="true" />
+								<Controls>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>ImportIndividualReport</Name>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECIndividualReport</DataSource>
+									<MenuItemName>PMINSRECIndividualReportImport</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<Text>@PMINSREC:UploadIndividualReport</Text>
+								</AxFormControl>
+								</Controls>
+							</AxFormControl>
+						</Controls>
+						<Caption>@PMINSREC:Process</Caption>
+					</AxFormControl>
+				</Controls>
+			</AxFormControl>
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_ReportType</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ReportType</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ProposalNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ProposalNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PolicyNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PolicyNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PolicyType</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PolicyType</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormDateControl">
+						<Name>Grid_PolicyIssueDate</Name>
+						<Type>Date</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PolicyIssueDate</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ICName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ICName</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_GrossPremium</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>GrossPremium</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FreeIns</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FreeIns</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_CustName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CustName</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_OutletName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutletName</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RegnNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RegnNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_EngineNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>EngineNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ChassisNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ChassisNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_DealerOutletCity</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DealerOutletCity</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_DlrExecutive</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DlrExecutive</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RDInstrumentNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RDInstrumentNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RInstBankName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RInstBankName</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormDateControl">
+						<Name>Grid_RDInstrumentDate</Name>
+						<Type>Date</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RDInstrumentDate</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_RDInstrumentAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RDInstrumentAmount</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_OutletDepositNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutletDepositNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_MulDepositNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>MulDepositNo</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormDateControl">
+						<Name>Grid_PaymentDate</Name>
+						<Type>Date</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PaymentDate</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FileName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FileName</DataField>
+						<DataSource>PMINSRECIndividualReport</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECIndividualReport</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

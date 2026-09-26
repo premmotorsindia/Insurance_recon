@@ -1,0 +1,604 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxForm xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="Microsoft.Dynamics.AX.Metadata.V6">
+	<Name>PMINSRECCardSettlement</Name>
+	<SourceCode>
+		<Methods xmlns="">
+			<Method>
+				<Name>classDeclaration</Name>
+				<Source><![CDATA[
+[Form]
+public class PMINSRECCardSettlement extends FormRun
+{
+}
+
+]]></Source>
+			</Method>
+		</Methods>
+		<DataSources xmlns="" />
+		<DataControls xmlns="" />
+		<Members xmlns="" />
+	</SourceCode>
+	<DataSources>
+		<AxFormDataSource xmlns="">
+			<Name>PMINSRECCardSettlement</Name>
+			<Table>PMINSRECCardSettlement</Table>
+			<Fields>
+				<AxFormDataSourceField>
+					<DataField>Status</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CardBank</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InsuranceType</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RequestId</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransDate</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>RegistrationNo</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ChassisNum</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CustomerName</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DlrExecutive</DataField>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ICName</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InsuranceCompany</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PolicyNo</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PolicyType</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FreeIns</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>OutletCode</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InventSiteId</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CardAmount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>InsuranceReceivedAmount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DifferenceAmount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>DebitAmount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CreditAmount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>LineCount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>HasEndorsement</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>TransactionId</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>BankTransactionId</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>PayableVendAccount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>BankAccountId</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>CustAccount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ReceiptVendAccount</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ReceiptVoucher</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JV1JournalNum</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JV1Voucher</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JV1Posted</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JV2JournalNum</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JV2Voucher</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>JV2Posted</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>Settled</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ManualReleased</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>IndividualReportFound</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>EngineNum</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>Narration</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ErrorText</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>FileName</DataField>
+					<AllowEdit>No</AllowEdit>
+				</AxFormDataSourceField>
+				<AxFormDataSourceField>
+					<DataField>ReceiptVendTransRecId</DataField>
+				</AxFormDataSourceField>
+			</Fields>
+			<ReferencedDataSources />
+			<AllowCreate>No</AllowCreate>
+			<DataSourceLinks />
+			<DerivedDataSources />
+		</AxFormDataSource>
+	</DataSources>
+	<Design>
+		<Caption xmlns="">@PMINSREC:InsuranceCardSettlement</Caption>
+		<DataSource xmlns="">PMINSRECCardSettlement</DataSource>
+		<Controls xmlns="">
+			<AxFormControl xmlns="" i:type="AxFormActionPaneControl">
+				<Name>ActionPane</Name>
+				<Type>ActionPane</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormActionPaneTabControl">
+						<Name>ActionPaneTab</Name>
+						<Type>ActionPaneTab</Type>
+						<FormControlExtension i:nil="true" />
+						<Controls>
+							<AxFormControl xmlns="" i:type="AxFormButtonGroupControl">
+								<Name>ButtonGroup</Name>
+								<Type>ButtonGroup</Type>
+								<FormControlExtension i:nil="true" />
+								<Controls>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>UploadCardFile</Name>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECCardSettlement</DataSource>
+									<MenuItemName>PMINSRECCardImport</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<Text>@PMINSREC:UploadCardFile</Text>
+								</AxFormControl>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>UploadIndividualReport</Name>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECCardSettlement</DataSource>
+									<MenuItemName>PMINSRECIndividualReportImport</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<Text>@PMINSREC:UploadIndividualReport</Text>
+								</AxFormControl>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>ProcessRematch</Name>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECCardSettlement</DataSource>
+									<MenuItemName>PMINSRECProcess</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<Text>@PMINSREC:ProcessReMatch</Text>
+								</AxFormControl>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>ReleaseManual</Name>
+									<NeedsRecord>Yes</NeedsRecord>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECCardSettlement</DataSource>
+									<MenuItemName>PMINSRECReleaseManual</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<MultiSelect>Yes</MultiSelect>
+									<Text>@PMINSREC:ReleaseManualLine</Text>
+								</AxFormControl>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>ViewCardLines</Name>
+									<NeedsRecord>Yes</NeedsRecord>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<DataSource>PMINSRECCardSettlement</DataSource>
+									<MenuItemName>PMINSRECCardImportLine</MenuItemName>
+									<MenuItemType>Display</MenuItemType>
+									<Text>@PMINSREC:CardFileLines</Text>
+								</AxFormControl>
+								<AxFormControl xmlns="" i:type="AxFormMenuFunctionButtonControl">
+									<Name>SummaryReport</Name>
+									<Type>MenuFunctionButton</Type>
+									<FormControlExtension i:nil="true" />
+									<MenuItemName>PMINSRECSummaryReport</MenuItemName>
+									<MenuItemType>Action</MenuItemType>
+									<Text>@PMINSREC:OutstandingDiscountReport</Text>
+								</AxFormControl>
+								</Controls>
+							</AxFormControl>
+						</Controls>
+						<Caption>@PMINSREC:Process</Caption>
+					</AxFormControl>
+				</Controls>
+			</AxFormControl>
+			<AxFormControl xmlns="" i:type="AxFormGridControl">
+				<Name>Grid</Name>
+				<Type>Grid</Type>
+				<FormControlExtension i:nil="true" />
+				<Controls>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_Status</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Status</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_CardBank</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardBank</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormComboBoxControl">
+						<Name>Grid_InsuranceType</Name>
+						<Type>ComboBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InsuranceType</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+						<Items />
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RequestId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RequestId</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormDateControl">
+						<Name>Grid_TransDate</Name>
+						<Type>Date</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransDate</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_RegistrationNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>RegistrationNo</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ChassisNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ChassisNum</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_CustomerName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CustomerName</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_DlrExecutive</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DlrExecutive</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ICName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ICName</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_InsuranceCompany</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InsuranceCompany</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PolicyNo</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PolicyNo</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PolicyType</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PolicyType</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FreeIns</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FreeIns</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_OutletCode</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>OutletCode</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_InventSiteId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InventSiteId</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_CardAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CardAmount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_InsuranceReceivedAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>InsuranceReceivedAmount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_DifferenceAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DifferenceAmount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_DebitAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>DebitAmount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormRealControl">
+						<Name>Grid_CreditAmount</Name>
+						<Type>Real</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CreditAmount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormIntegerControl">
+						<Name>Grid_LineCount</Name>
+						<Type>Integer</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>LineCount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>Grid_HasEndorsement</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>HasEndorsement</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_TransactionId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>TransactionId</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_BankTransactionId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>BankTransactionId</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_PayableVendAccount</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>PayableVendAccount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_BankAccountId</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>BankAccountId</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_CustAccount</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>CustAccount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ReceiptVendAccount</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ReceiptVendAccount</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ReceiptVoucher</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ReceiptVoucher</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_JV1JournalNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JV1JournalNum</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_JV1Voucher</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JV1Voucher</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>Grid_JV1Posted</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JV1Posted</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_JV2JournalNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JV2JournalNum</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_JV2Voucher</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JV2Voucher</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>Grid_JV2Posted</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>JV2Posted</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>Grid_Settled</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Settled</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>Grid_ManualReleased</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ManualReleased</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormCheckBoxControl">
+						<Name>Grid_IndividualReportFound</Name>
+						<Type>CheckBox</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>IndividualReportFound</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_EngineNum</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>EngineNum</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_Narration</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>Narration</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_ErrorText</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>ErrorText</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+					<AxFormControl xmlns="" i:type="AxFormStringControl">
+						<Name>Grid_FileName</Name>
+						<Type>String</Type>
+						<FormControlExtension i:nil="true" />
+						<DataField>FileName</DataField>
+						<DataSource>PMINSRECCardSettlement</DataSource>
+					</AxFormControl>
+				</Controls>
+				<DataSource>PMINSRECCardSettlement</DataSource>
+			</AxFormControl>
+		</Controls>
+	</Design>
+	<Parts />
+</AxForm>

@@ -1,0 +1,292 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECIndividualReport</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Insurance portal individual report (new car / renewal). Supporting data for the card lines:
+/// TC name (DLR_EXECUTIVE), IC name, registration number and chassis number.
+/// </summary>
+public class PMINSRECIndividualReport extends common
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>find</Name>
+				<Source><![CDATA[
+    public static PMINSRECIndividualReport find(PMINSRECRequestId _proposalNo, boolean _forupdate = false)
+    {
+        PMINSRECIndividualReport report;
+
+        if (_proposalNo)
+        {
+            report.selectForUpdate(_forupdate);
+
+            select firstonly report
+                where report.ProposalNo == _proposalNo;
+        }
+
+        return report;
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<Label>@PMINSREC:InsurancePortalIndividualReport</Label>
+	<TitleField1>ProposalNo</TitleField1>
+	<TitleField2>RegnNo</TitleField2>
+	<CreatedBy>Yes</CreatedBy>
+	<CreatedDateTime>Yes</CreatedDateTime>
+	<ClusteredIndex>ProposalIdx</ClusteredIndex>
+	<PrimaryIndex>ProposalIdx</PrimaryIndex>
+	<ReplacementKey>ProposalIdx</ReplacementKey>
+	<TableGroup>Transaction</TableGroup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>Overview</Name>
+			<Label>@PMINSREC:Overview</Label>
+			<Fields>
+				<AxTableFieldGroupField>
+					<DataField>ReportType</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ProposalNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PolicyNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PolicyType</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PolicyIssueDate</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ICName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>GrossPremium</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>FreeIns</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>CustName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>OutletName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RegnNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>EngineNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>ChassisNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DealerOutletCity</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>DlrExecutive</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RDInstrumentNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RInstBankName</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RDInstrumentDate</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>RDInstrumentAmount</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>OutletDepositNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>MulDepositNo</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>PaymentDate</DataField>
+				</AxTableFieldGroupField>
+				<AxTableFieldGroupField>
+					<DataField>FileName</DataField>
+				</AxTableFieldGroupField>
+			</Fields>
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns="" i:type="AxTableFieldEnum">
+			<Name>ReportType</Name>
+			<AllowEdit>No</AllowEdit>
+			<EnumType>PMINSRECInsuranceType</EnumType>
+			<Label>@PMINSREC:ReportType</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ProposalNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECRequestId</ExtendedDataType>
+			<Label>@PMINSREC:ProposalNumber</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PolicyNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECPolicyNo</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>PolicyType</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:PolicyType</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldDate">
+			<Name>PolicyIssueDate</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>TransDate</ExtendedDataType>
+			<Label>@PMINSREC:PolicyIssueDate</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ICName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:IcName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>GrossPremium</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:GrossPremium</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>FreeIns</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:FreeInsurance</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>CustName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:CustomerName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>OutletName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText100</ExtendedDataType>
+			<Label>@PMINSREC:OutletName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RegnNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECRegistrationNo</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>EngineNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECEngineNum</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>ChassisNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECChassisNum</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>DealerOutletCity</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:DealerOutletCity</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>DlrExecutive</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECDlrExecutive</ExtendedDataType>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RDInstrumentNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECTransactionId</ExtendedDataType>
+			<Label>@PMINSREC:RdInstrumentNumber</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>RInstBankName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:InstrumentBankName</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldDate">
+			<Name>RDInstrumentDate</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>TransDate</ExtendedDataType>
+			<Label>@PMINSREC:RdInstrumentDate</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldReal">
+			<Name>RDInstrumentAmount</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>AmountMST</ExtendedDataType>
+			<Label>@PMINSREC:RdInstrumentAmount</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>OutletDepositNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:OutletDepositNumber</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>MulDepositNo</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECText60</ExtendedDataType>
+			<Label>@PMINSREC:MulDepositNumber</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldDate">
+			<Name>PaymentDate</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>TransDate</ExtendedDataType>
+			<Label>@PMINSREC:PaymentDate</Label>
+		</AxTableField>
+		<AxTableField xmlns="" i:type="AxTableFieldString">
+			<Name>FileName</Name>
+			<AllowEdit>No</AllowEdit>
+			<ExtendedDataType>PMINSRECFileName</ExtendedDataType>
+		</AxTableField>
+	</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>ProposalIdx</Name>
+			<AlternateKey>Yes</AlternateKey>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>ProposalNo</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>ChassisIdx</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>ChassisNo</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations>
+	</Relations>
+	<StateMachines />
+</AxTable>

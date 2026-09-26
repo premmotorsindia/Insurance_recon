@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PMINSRECFileFormatDefaults</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+/// <summary>
+/// Loads the default Excel column mapping for the ICICI and HSBC card files.
+/// HDFC is set up manually in the column mapping form once the HDFC file sample is available.
+/// </summary>
+public final class PMINSRECFileFormatDefaults
+{
+}
+
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    public static void main(Args _args)
+    {
+        PMINSRECFileFormatDefaults::loadDefaults();
+
+        PMINSRECFormHelper::refreshCaller(_args);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>loadDefaults</Name>
+				<Source><![CDATA[
+    public static void loadDefaults()
+    {
+        ttsbegin;
+
+        // ICICI card statement export (also used for the new car card statement)
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::RequestId,           'Request ID');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::ProposalReceiptDate, 'Proposal Receipting Date');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::InsuranceCompany,    'Insurance Company');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::PolicyNo,            'Policy No');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::TransactionId,       'Transaction ID');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::CustomerName,        'Customer Name');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::RegistrationNo,      'Registration No.');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::OutletCode,          'Transaction Outlet');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::TransType,           'Transaction Type');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::Amount,              'Transaction Amount');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::Description,         'Description');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::TransDate,           'Transaction Date');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::BankTransactionId,   'Charge Bank Transaction ID');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::RefundInitiated,     'Refund Initiated');
+
+        // HSBC dealer auto debit system export
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::TransDate,         'Transaction Date');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::TransType,         'Transaction Type');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::TransactionId,     'Transaction Id');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::BankTransactionId, 'Transaction Id');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::Amount,            'Amount');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::OutletCode,        'Outlet Code');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::PolicyNo,          'Insurance Comp Ref');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::RequestId,         'Proposal No');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::Description,       'Trans Type');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::RegistrationNo,    'Registration No');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::CustomerName,      'Customer Name');
+
+        ttscommit;
+
+        info("Default column mapping loaded for ICICI and HSBC. Set up HDFC manually.");
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>add</Name>
+				<Source><![CDATA[
+    private static void add(PMINSRECCardBank _cardBank, PMINSRECCardField _cardField, PMINSRECColumnName _columnName)
+    {
+        PMINSRECFileFormat format;
+
+        select firstonly forupdate format
+            where format.CardBank  == _cardBank
+               && format.CardField == _cardField;
+
+        if (!format)
+        {
+            format.CardBank   = _cardBank;
+            format.CardField  = _cardField;
+            format.ColumnName = _columnName;
+            format.insert();
+        }
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>
