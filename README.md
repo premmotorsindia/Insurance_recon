@@ -6,11 +6,15 @@ customer / fixed-vendor receipts.
 
 ```
 Metadata/PMINSREC/Descriptor/PMINSREC.xml     model descriptor
-Metadata/PMINSREC/PMINSREC/Ax*                AOT objects
+Metadata/PMINSREC/PMINSREC/Ax*                AOT objects (73)
+Projects/PMINSREC/PMINSREC.sln                Visual Studio solution
+Projects/PMINSREC/PMINSREC/PMINSREC.rnrproj   Visual Studio project (all objects, by folder)
+docs/PMINSREC_FDD.docx                        Functional design document
+docs/PMINSREC_TDD.docx                        Technical design document (object list + X++ code)
 ```
 
-Copy `Metadata/PMINSREC` into `PackagesLocalDirectory` (or map it into your VS solution), build the
-model, and synchronise the database. The model references `ApplicationSuite` and its standard
+Copy `Metadata/PMINSREC` into `PackagesLocalDirectory`, open `Projects/PMINSREC/PMINSREC.sln` in Visual
+Studio, build the model, and synchronise the database. The model references `ApplicationSuite` and its standard
 dependencies.
 
 ## Flow
