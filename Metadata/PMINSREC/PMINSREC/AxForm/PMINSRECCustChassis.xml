@@ -56,7 +56,7 @@ public class PMINSRECCustChassis extends FormRun
 					<AllowEdit>No</AllowEdit>
 				</AxFormDataSourceField>
 				<AxFormDataSourceField>
-					<DataField>PMINSRECChassisNum</DataField>
+					<DataField>ChassisNum</DataField>
 				</AxFormDataSourceField>
 			</Fields>
 			<ReferencedDataSources />
@@ -90,10 +90,10 @@ public class PMINSRECCustChassis extends FormRun
 						<DataSource>CustTable</DataSource>
 					</AxFormControl>
 					<AxFormControl xmlns="" i:type="AxFormStringControl">
-						<Name>Grid_PMINSRECChassisNum</Name>
+						<Name>Grid_ChassisNum</Name>
 						<Type>String</Type>
 						<FormControlExtension i:nil="true" />
-						<DataField>PMINSRECChassisNum</DataField>
+						<DataField>ChassisNum</DataField>
 						<DataSource>CustTable</DataSource>
 					</AxFormControl>
 					<AxFormControl xmlns="" i:type="AxFormStringControl">

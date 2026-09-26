@@ -8,7 +8,7 @@
 			<Label>@PMINSREC:Vehicle</Label>
 			<Fields>
 				<AxTableFieldGroupField>
-					<DataField>PMINSRECChassisNum</DataField>
+					<DataField>ChassisNum</DataField>
 				</AxTableFieldGroupField>
 			</Fields>
 		</AxTableFieldGroup>
@@ -16,7 +16,7 @@
 	<FieldModifications />
 	<Fields>
 		<AxTableField xmlns="" i:type="AxTableFieldString">
-			<Name>PMINSRECChassisNum</Name>
+			<Name>ChassisNum</Name>
 			<ExtendedDataType>PMINSRECChassisNum</ExtendedDataType>
 		</AxTableField>
 	</Fields>
@@ -27,7 +27,7 @@
 			<AllowDuplicates>Yes</AllowDuplicates>
 			<Fields>
 				<AxTableIndexField>
-					<DataField>PMINSRECChassisNum</DataField>
+					<DataField>ChassisNum</DataField>
 				</AxTableIndexField>
 			</Fields>
 		</AxTableIndex>

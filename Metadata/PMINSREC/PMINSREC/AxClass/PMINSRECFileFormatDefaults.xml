@@ -4,8 +4,9 @@
 	<SourceCode>
 		<Declaration><![CDATA[
 /// <summary>
-/// Loads the default Excel column mapping for the ICICI and HSBC card files.
-/// HDFC is set up manually in the column mapping form once the HDFC file sample is available.
+/// Loads the default Excel column mapping for the ICICI, HDFC and HSBC card files.
+/// HDFC gets the ICICI column names as placeholders: the user changes them to the HDFC headers
+/// in the column mapping form once the HDFC file is available. Existing rows are never overwritten.
 /// </summary>
 public final class PMINSRECFileFormatDefaults
 {
@@ -48,6 +49,22 @@ public final class PMINSRECFileFormatDefaults
         PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::BankTransactionId,   'Charge Bank Transaction ID');
         PMINSRECFileFormatDefaults::add(PMINSRECCardBank::ICICI, PMINSRECCardField::RefundInitiated,     'Refund Initiated');
 
+        // HDFC: placeholders (ICICI column names) - map to the HDFC file headers in the column mapping form
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::RequestId,           'Request ID');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::ProposalReceiptDate, 'Proposal Receipting Date');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::InsuranceCompany,    'Insurance Company');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::PolicyNo,            'Policy No');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::TransactionId,       'Transaction ID');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::CustomerName,        'Customer Name');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::RegistrationNo,      'Registration No.');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::OutletCode,          'Transaction Outlet');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::TransType,           'Transaction Type');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::Amount,              'Transaction Amount');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::Description,         'Description');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::TransDate,           'Transaction Date');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::BankTransactionId,   'Charge Bank Transaction ID');
+        PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HDFC, PMINSRECCardField::RefundInitiated,     'Refund Initiated');
+
         // HSBC dealer auto debit system export
         PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::TransDate,         'Transaction Date');
         PMINSRECFileFormatDefaults::add(PMINSRECCardBank::HSBC, PMINSRECCardField::TransType,         'Transaction Type');
@@ -63,7 +80,7 @@ public final class PMINSRECFileFormatDefaults
 
         ttscommit;
 
-        info("Default column mapping loaded for ICICI and HSBC. Set up HDFC manually.");
+        info("Default column mapping loaded for ICICI, HDFC and HSBC. Change the HDFC column names to the headers of the HDFC file.");
     }
 
 ]]></Source>

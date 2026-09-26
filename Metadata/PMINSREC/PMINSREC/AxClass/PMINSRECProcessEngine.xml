@@ -615,7 +615,7 @@ public final class PMINSRECProcessEngine
 
         select firstonly AccountNum from custTable
             where custTable.CustGroup          == parameters.NewCarCustGroup
-               && custTable.PMINSRECChassisNum == _chassisNum;
+               && custTable.ChassisNum         == _chassisNum;
 
         if (custTable.AccountNum)
         {
@@ -626,7 +626,7 @@ public final class PMINSRECProcessEngine
 
         while select AccountNum from custTable
             where custTable.CustGroup          == parameters.NewCarCustGroup
-               && custTable.PMINSRECChassisNum like pattern
+               && custTable.ChassisNum         like pattern
         {
             found++;
             custAccount = custTable.AccountNum;

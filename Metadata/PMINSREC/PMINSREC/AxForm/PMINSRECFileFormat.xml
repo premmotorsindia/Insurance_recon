@@ -64,7 +64,7 @@ public class PMINSRECFileFormat extends FormRun
 									<DataSource>PMINSRECFileFormat</DataSource>
 									<MenuItemName>PMINSRECFileFormatDefaults</MenuItemName>
 									<MenuItemType>Action</MenuItemType>
-									<Text>@PMINSREC:LoadIciciHsbcDefaults</Text>
+									<Text>@PMINSREC:LoadIciciHdfcHsbcDefaults</Text>
 								</AxFormControl>
 								</Controls>
 							</AxFormControl>
