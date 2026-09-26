@@ -108,8 +108,8 @@ public final class PMINSRECJournalHelper
 				<Name>addLine</Name>
 				<Source><![CDATA[
     /// <summary>
-    /// Adds a balanced journal line: <paramref name="_amount"/> &gt; 0 debits the account and credits the offset
-    /// account, &lt; 0 credits the account and debits the offset account.
+    /// Adds a journal line: <paramref name="_amount"/> &gt; 0 debits the account, &lt; 0 credits it.
+    /// Without an offset account the line is one side of a multi-line voucher.
     /// </summary>
     public LedgerJournalTrans addLine(
         LedgerJournalId     _journalNum,
@@ -144,8 +144,11 @@ public final class PMINSRECJournalHelper
         ledgerJournalTrans.AccountType = _accountType;
         ledgerJournalTrans.parmAccount(_account, _accountType);
 
-        ledgerJournalTrans.OffsetAccountType = _offsetAccountType;
-        ledgerJournalTrans.parmOffsetAccount(_offsetAccount, _offsetAccountType);
+        if (_offsetAccount)
+        {
+            ledgerJournalTrans.OffsetAccountType = _offsetAccountType;
+            ledgerJournalTrans.parmOffsetAccount(_offsetAccount, _offsetAccountType);
+        }
 
         if (_amount >= 0)
         {
@@ -277,6 +280,29 @@ public final class PMINSRECJournalHelper
     public static boolean isPosted(LedgerJournalId _journalNum)
     {
         return _journalNum && LedgerJournalTable::find(_journalNum).Posted == NoYes::Yes;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>addVoucherLine</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Adds one side of a multi-line voucher (no offset account): <paramref name="_amount"/> &gt; 0 is a debit
+    /// line, &lt; 0 a credit line. All lines of a voucher must balance.
+    /// </summary>
+    public LedgerJournalTrans addVoucherLine(
+        LedgerJournalId     _journalNum,
+        Voucher             _voucher,
+        TransDate           _transDate,
+        LedgerJournalACType _accountType,
+        str                 _account,
+        AmountCur           _amount,
+        InvoiceId           _invoice,
+        str                 _text)
+    {
+        return this.addLine(_journalNum, _voucher, _transDate, _accountType, _account, _amount,
+            LedgerJournalACType::Ledger, '', _invoice, _text);
     }
 
 ]]></Source>

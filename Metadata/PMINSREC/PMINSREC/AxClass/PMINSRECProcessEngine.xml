@@ -6,11 +6,14 @@
 /// <summary>
 /// Processes the reconciliation grid. Runs after every upload and from the "Process / re-match" button
 /// (daily re-match of pending lines against the latest receipts).
-/// <para>JV1 (all lines): Vendor payable Dr / Card bank Cr.</para>
-/// <para>JV1 and JV2 are vendor invoice journals (VJV); the vendor payable is always the account, the other side the offset.</para>
-/// <para>JV2 new car: Vendor payable Cr / offset Customer (matched on chassis number in the new car customer group) Dr.</para>
+/// <para>JV1 and JV2 are vendor invoice journals (VJV). Every voucher has separate debit and credit lines
+/// (no offset account).</para>
+/// <para>JV1 (all lines): line 1 Vendor payable Dr, line 2 Card bank Cr.</para>
+/// <para>JV2 new car: line 1 Customer (matched on chassis number in the new car customer group) Dr,
+/// line 2 Vendor payable Cr.</para>
 /// <para>JV2 renewal: receipt found on the fixed vendor (registration number in the text):
-/// Vendor payable Cr (card amount) / offset Fixed vendor Dr (receipt amount) + Difference account Dr/Cr (card amount - receipt amount).
+/// line 1 Fixed vendor Dr (receipt amount), line 2 Vendor payable Cr (card amount),
+/// line 3 Discount account of the mapping Dr/Cr (card amount - receipt amount).
 /// The vendor payable and the fixed vendor receipt are settled.</para>
 /// <para>When the parameter "Auto post and settle" is off, journals are only created. Posting is done by the user;
 /// the next run continues with JV2 and the settlement of the posted journals.</para>
@@ -67,7 +70,7 @@ public final class PMINSRECProcessEngine
 				<Name>createJV1</Name>
 				<Source><![CDATA[
     /// <summary>
-    /// JV1: Vendor payable Dr / Card bank Cr for every new line with a positive net amount.
+    /// JV1: line 1 Vendor payable Dr, line 2 Card bank Cr for every new line with a positive net amount.
     /// </summary>
     private void createJV1()
     {
@@ -76,6 +79,7 @@ public final class PMINSRECProcessEngine
         PMINSRECJournalHelper  journalHelper = PMINSRECJournalHelper::construct("Insurance card settlement JV1");
         LedgerJournalTrans     ledgerJournalTrans;
         LedgerJournalId        journalNum;
+        Voucher                voucher;
         List                   recIds = this.findLines(false);
         ListEnumerator         enumerator = recIds.getEnumerator();
         int                    infologStart;
@@ -96,15 +100,27 @@ public final class PMINSRECProcessEngine
                 settlement = PMINSRECCardSettlement::findRecId(enumerator.current(), true);
                 PMINSRECSettlementBuilder::enrich(settlement);
 
-                ledgerJournalTrans = journalHelper.addLine(
+                voucher = journalHelper.newVoucher(journalNum);
+
+                // line 1: Vendor payable Dr
+                ledgerJournalTrans = journalHelper.addVoucherLine(
                     journalNum,
-                    journalHelper.newVoucher(journalNum),
+                    voucher,
                     settlement.TransDate,
                     LedgerJournalACType::Vend,
                     setup.PayableVendAccount,
                     settlement.CardAmount,
+                    settlement.RequestId,
+                    settlement.Narration);
+
+                // line 2: Card bank Cr
+                journalHelper.addVoucherLine(
+                    journalNum,
+                    voucher,
+                    settlement.TransDate,
                     LedgerJournalACType::Bank,
                     setup.BankAccountId,
+                    -settlement.CardAmount,
                     settlement.RequestId,
                     settlement.Narration);
 
@@ -244,12 +260,13 @@ public final class PMINSRECProcessEngine
 				<Name>createJV2NewCar</Name>
 				<Source><![CDATA[
     /// <summary>
-    /// New car: Vendor payable Cr / offset Customer Dr. The customer is found on the chassis number.
+    /// New car: line 1 Customer Dr, line 2 Vendor payable Cr. The customer is found on the chassis number.
     /// </summary>
     private boolean createJV2NewCar(PMINSRECCardSettlement _settlement, PMINSRECPostingSetup _setup, PMINSRECJournalHelper _journalHelper)
     {
         CustAccount        custAccount = this.findCustomerByChassis(_settlement.ChassisNum);
         LedgerJournalId    journalNum;
+        Voucher            voucher;
         LedgerJournalTrans ledgerJournalTrans;
 
         if (!custAccount)
@@ -263,16 +280,27 @@ public final class PMINSRECProcessEngine
 
         journalNum = _journalHelper.journalNum(_setup.JournalNameJV2);
 
-        // VJV line: Vendor payable Cr / offset Customer Dr
-        ledgerJournalTrans = _journalHelper.addLine(
+        voucher = _journalHelper.newVoucher(journalNum);
+
+        // line 1: Customer Dr
+        ledgerJournalTrans = _journalHelper.addVoucherLine(
             journalNum,
-            _journalHelper.newVoucher(journalNum),
+            voucher,
+            _settlement.TransDate,
+            LedgerJournalACType::Cust,
+            custAccount,
+            _settlement.CardAmount,
+            _settlement.RequestId + '-2',
+            _settlement.Narration);
+
+        // line 2: Vendor payable Cr
+        _journalHelper.addVoucherLine(
+            journalNum,
+            voucher,
             _settlement.TransDate,
             LedgerJournalACType::Vend,
             _settlement.PayableVendAccount,
             -_settlement.CardAmount,
-            LedgerJournalACType::Cust,
-            custAccount,
             _settlement.RequestId + '-2',
             _settlement.Narration);
 
@@ -293,7 +321,7 @@ public final class PMINSRECProcessEngine
 				<Name>createJV2Renewal</Name>
 				<Source><![CDATA[
     /// <summary>
-    /// Renewal: Vendor payable Cr (card amount) / offset Fixed vendor Dr (receipt) + Difference Dr/Cr.
+    /// Renewal: line 1 Fixed vendor Dr (receipt), line 2 Vendor payable Cr (card), line 3 Discount Dr/Cr.
     /// </summary>
     private boolean createJV2Renewal(PMINSRECCardSettlement _settlement, PMINSRECPostingSetup _setup, PMINSRECJournalHelper _journalHelper)
     {
@@ -352,32 +380,39 @@ public final class PMINSRECProcessEngine
         journalNum = _journalHelper.journalNum(_setup.JournalNameJV2);
         voucher    = _journalHelper.newVoucher(journalNum);
 
-        // VJV line: Vendor payable Cr receipt amount / offset Fixed vendor Dr
-        _journalHelper.addLine(
+        // line 1: Fixed vendor Dr receipt amount (settles the receipt)
+        _journalHelper.addVoucherLine(
+            journalNum,
+            voucher,
+            _settlement.TransDate,
+            LedgerJournalACType::Vend,
+            receiptTrans.AccountNum,
+            receiptAmount,
+            _settlement.RequestId + '-2',
+            _settlement.Narration);
+
+        // line 2: Vendor payable Cr card amount (settles JV1)
+        _journalHelper.addVoucherLine(
             journalNum,
             voucher,
             _settlement.TransDate,
             LedgerJournalACType::Vend,
             _settlement.PayableVendAccount,
-            -receiptAmount,
-            LedgerJournalACType::Vend,
-            receiptTrans.AccountNum,
+            -_settlement.CardAmount,
             _settlement.RequestId + '-2',
             _settlement.Narration);
 
-        // VJV line: Vendor payable Cr difference / offset Difference account Dr (discount given);
-        // a negative difference (receipt more than card amount) is posted the other way round
+        // line 3: Discount (card amount - receipt amount) Dr on the GL / customer / vendor of the mapping;
+        // a negative difference (receipt more than card amount) is a credit line
         if (differenceAmount)
         {
-            _journalHelper.addLine(
+            _journalHelper.addVoucherLine(
                 journalNum,
                 voucher,
                 _settlement.TransDate,
-                LedgerJournalACType::Vend,
-                _settlement.PayableVendAccount,
-                -differenceAmount,
                 _setup.DiffAccountType,
                 _setup.DiffAccountNum,
+                differenceAmount,
                 _settlement.RequestId + '-D',
                 _settlement.Narration);
         }

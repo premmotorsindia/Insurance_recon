@@ -21,9 +21,9 @@ dependencies.
 | 2. Net rule | Lines are grouped by card bank and Request ID: net = DEBIT − CREDIT over all files uploaded so far. Net ≤ 0 is **Net zero – skipped**. Net > 0 becomes one grid line for the net amount, and its date and transaction ID come from the latest DEBIT line. A request with an ENDORSEMENT line goes to **Manual**. |
 | 3. Classify | A Request ID starting with `N` is a new car. One starting with `R` or `S` is a renewal. The outlet code is mapped to a site through **Outlet site mapping**. |
 | 4. Individual report | **Upload individual report** (new car or renewal). Every column is stored. Lines match on PROPOSALNO = Request ID and pick up the TC name (DLR_EXECUTIVE), IC name, registration number, chassis, engine number and FREE_INS. |
-| 5. JV1 (immediately) | Created right after the upload: **Vendor payable Dr / Card bank Cr**. The posting date is the card transaction date. The journal name, vendor and bank come from **Posting setup** (card bank + new car/renewal + site). |
-| 6. JV2 new car | Looks for a customer in the new car customer group (default `C000001`) where `CustTable.ChassisNum` = chassis. An exact match wins; otherwise one unique "ends with" match is accepted. Posts a VJV: **Vendor payable Cr / offset Customer Dr**. If no customer is found the status is **Customer not found**. |
-| 7. JV2 renewal | Looks for an open credit on the fixed vendor whose text contains the registration number. Posts a VJV: **Vendor payable Cr (card amount)** / offset **Fixed vendor Dr (receipt amount)** + offset **Difference account Dr/Cr (card − receipt)**. If no receipt is found the status is **Receipt not available**. |
+| 5. JV1 (immediately) | Created right after the upload as one voucher with two lines: **line 1 Vendor payable Dr**, **line 2 Card bank Cr**. The posting date is the card transaction date. The journal name, vendor and bank come from **Posting setup** (card bank + new car/renewal + site). |
+| 6. JV2 new car | Looks for a customer in the new car customer group (default `C000001`) where `CustTable.ChassisNum` = chassis. An exact match wins; otherwise one unique "ends with" match is accepted. Posts a VJV voucher with two lines: **line 1 Customer Dr**, **line 2 Vendor payable Cr**. If no customer is found the status is **Customer not found**. |
+| 7. JV2 renewal | Looks for an open credit on the fixed vendor whose text contains the registration number. Posts a VJV voucher: **line 1 Fixed vendor Dr (receipt amount)**, **line 2 Vendor payable Cr (card amount)**, and when there is a difference **line 3 Discount account (GL / customer / vendor from the mapping) Dr (card − receipt)**; a negative difference makes line 3 a credit. If no receipt is found the status is **Receipt not available**. |
 | 8. Settle | Once JV2 is posted, the JV1 debit is settled against the JV2 credit on the vendor payable. For a renewal, the fixed vendor receipt is also settled against the JV2 debit. The status becomes **Completed**. |
 | 9. Daily re-match | **Process / re-match** runs steps 5–8 again for every open line against the latest receipts and customers. |
 
@@ -62,7 +62,7 @@ only after **Release manual line**.
 - `CustTable.ChassisNum` is a new field added by the table extension `CustTable.PMINSREC`.
 - Settlement uses `VendTrans::settleTransaction(SpecTransExecutionContext, VendTransSettleTransactionParameters)`
   (10.0.40 API).
-- JV1 and JV2 are vendor invoice journals (VJV), and the vendor payable is always the account. JV2 offsets are
-  customer lines (new car) and fixed-vendor / difference lines (renewal). Check that the VJV journal name allows
-  these offset account types.
+- JV1 and JV2 are vendor invoice journals (VJV). No offset accounts are used: every voucher has a separate debit
+  line and credit line (plus the discount line for a renewal with a difference). Check that the VJV journal name
+  allows multi-line vouchers with customer / bank / ledger lines.
 - The main menu entry is added by the extension `MainMenu.PMINSREC`.
