@@ -52,6 +52,12 @@ public class PMINSRECPostingSetup extends common
             ret = checkFailed("Fixed vendor is mandatory for renewal setup.");
         }
 
+        if (ret)
+        {
+            ret = PMINSRECPostingSetup::checkVendInvoiceJournalName(this.JournalNameJV1)
+               && PMINSRECPostingSetup::checkVendInvoiceJournalName(this.JournalNameJV2);
+        }
+
         if (ret && this.DiffAccountNum)
         {
             switch (this.DiffAccountType)
@@ -83,6 +89,32 @@ public class PMINSRECPostingSetup extends common
         }
 
         return ret;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>checkVendInvoiceJournalName</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// JV1 and JV2 are posted through the vendor invoice journal (VJV).
+    /// </summary>
+    public static boolean checkVendInvoiceJournalName(LedgerJournalNameId _journalName)
+    {
+        LedgerJournalName ledgerJournalName = LedgerJournalName::find(_journalName);
+
+        if (!ledgerJournalName)
+        {
+            return checkFailed(strFmt("Journal name %1 does not exist.", _journalName));
+        }
+
+        if (ledgerJournalName.JournalType != LedgerJournalType::Purch)
+        {
+            return checkFailed(strFmt("Journal name %1 must be a vendor invoice journal (journal type %2).",
+                _journalName, LedgerJournalType::Purch));
+        }
+
+        return true;
     }
 
 ]]></Source>
@@ -166,13 +198,13 @@ public class PMINSRECPostingSetup extends common
 		<AxTableField xmlns="" i:type="AxTableFieldString">
 			<Name>JournalNameJV1</Name>
 			<ExtendedDataType>LedgerJournalNameId</ExtendedDataType>
-			<Label>@PMINSREC:Jv1JournalNameVendorDrCardBankCr</Label>
+			<Label>@PMINSREC:Jv1VjvJournalNameVendorDrCardBankCr</Label>
 			<Mandatory>Yes</Mandatory>
 		</AxTableField>
 		<AxTableField xmlns="" i:type="AxTableFieldString">
 			<Name>JournalNameJV2</Name>
 			<ExtendedDataType>LedgerJournalNameId</ExtendedDataType>
-			<Label>@PMINSREC:Jv2JournalNameCustomerOrReceiptSettlement</Label>
+			<Label>@PMINSREC:Jv2VjvJournalNameVendorCrCustomerOrReceiptDr</Label>
 			<Mandatory>Yes</Mandatory>
 		</AxTableField>
 		<AxTableField xmlns="" i:type="AxTableFieldString">

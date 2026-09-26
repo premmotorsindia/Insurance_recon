@@ -22,8 +22,8 @@ dependencies.
 | 3. Classify | A Request ID starting with `N` is a new car. One starting with `R` or `S` is a renewal. The outlet code is mapped to a site through **Outlet site mapping**. |
 | 4. Individual report | **Upload individual report** (new car or renewal). Every column is stored. Lines match on PROPOSALNO = Request ID and pick up the TC name (DLR_EXECUTIVE), IC name, registration number, chassis, engine number and FREE_INS. |
 | 5. JV1 (immediately) | Created right after the upload: **Vendor payable Dr / Card bank Cr**. The posting date is the card transaction date. The journal name, vendor and bank come from **Posting setup** (card bank + new car/renewal + site). |
-| 6. JV2 new car | Looks for a customer in the new car customer group (default `C000001`) where `CustTable.PMINSRECChassisNum` = chassis. An exact match wins; otherwise one unique "ends with" match is accepted. Posts **Customer Dr / Vendor payable Cr**. If no customer is found the status is **Customer not found**. |
-| 7. JV2 renewal | Looks for an open credit on the fixed vendor whose text contains the registration number. Posts **Fixed vendor Dr (receipt amount)** + **Difference account Dr/Cr (card − receipt)** / **Vendor payable Cr (card amount)**. If no receipt is found the status is **Receipt not available**. |
+| 6. JV2 new car | Looks for a customer in the new car customer group (default `C000001`) where `CustTable.PMINSRECChassisNum` = chassis. An exact match wins; otherwise one unique "ends with" match is accepted. Posts a VJV: **Vendor payable Cr / offset Customer Dr**. If no customer is found the status is **Customer not found**. |
+| 7. JV2 renewal | Looks for an open credit on the fixed vendor whose text contains the registration number. Posts a VJV: **Vendor payable Cr (card amount)** / offset **Fixed vendor Dr (receipt amount)** + offset **Difference account Dr/Cr (card − receipt)**. If no receipt is found the status is **Receipt not available**. |
 | 8. Settle | Once JV2 is posted, the JV1 debit is settled against the JV2 credit on the vendor payable. For a renewal, the fixed vendor receipt is also settled against the JV2 debit. The status becomes **Completed**. |
 | 9. Daily re-match | **Process / re-match** runs steps 5–8 again for every open line against the latest receipts and customers. |
 
@@ -39,7 +39,7 @@ only after **Release manual line**.
 1. **Parameters**: auto post and settle, new car customer group (`C000001`), maximum difference (0 = no limit).
 2. **Outlet site mapping**: 2009, 2051, 3792, … → site.
 3. **Posting setup**: one row per card bank × new car/renewal × site:
-   - JV1 and JV2 journal names (vendor invoice journal)
+   - JV1 and JV2 journal names; both must be vendor invoice journals (journal type *Vendor invoice recording*, checked on save)
    - vendor payable account
    - card bank account
    - fixed vendor (renewal)
@@ -59,6 +59,7 @@ only after **Release manual line**.
   `CustTable`, change `PMINSRECProcessEngine.findCustomerByChassis` to use it.
 - Settlement uses `VendTrans::settleTransaction(SpecTransExecutionContext, VendTransSettleTransactionParameters)`
   (10.0.40 API).
-- JV2 contains customer lines (new car) and vendor-to-vendor lines (renewal). If the vendor invoice journal
-  name does not allow them, set a general journal name as the JV2 journal name in the posting setup.
+- JV1 and JV2 are vendor invoice journals (VJV), and the vendor payable is always the account. JV2 offsets are
+  customer lines (new car) and fixed-vendor / difference lines (renewal). Check that the VJV journal name allows
+  these offset account types.
 - The main menu entry is added by the extension `MainMenu.PMINSREC`.

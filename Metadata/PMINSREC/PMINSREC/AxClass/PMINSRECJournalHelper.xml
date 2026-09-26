@@ -4,7 +4,7 @@
 	<SourceCode>
 		<Declaration><![CDATA[
 /// <summary>
-/// Creates vendor invoice journals (one journal per journal name per run) and their lines,
+/// Creates vendor invoice journals (VJV, one journal per journal name per run) and their lines,
 /// and posts them.
 /// </summary>
 public final class PMINSRECJournalHelper
@@ -169,13 +169,15 @@ public final class PMINSRECJournalHelper
                 break;
         }
 
-        if (_offsetAccountType == LedgerJournalACType::Vend)
+        switch (_offsetAccountType)
         {
-            ledgerJournalTrans.OffsetDefaultDimension = VendTable::find(_offsetAccount).DefaultDimension;
-            if (!ledgerJournalTrans.PostingProfile)
-            {
-                ledgerJournalTrans.PostingProfile = VendParameters::find().PostingProfile;
-            }
+            case LedgerJournalACType::Vend:
+                ledgerJournalTrans.OffsetDefaultDimension = VendTable::find(_offsetAccount).DefaultDimension;
+                break;
+
+            case LedgerJournalACType::Cust:
+                ledgerJournalTrans.OffsetDefaultDimension = CustTable::find(_offsetAccount).DefaultDimension;
+                break;
         }
 
         ledgerJournalTrans.Invoice  = _invoice;
