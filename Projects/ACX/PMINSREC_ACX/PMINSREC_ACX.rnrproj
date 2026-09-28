@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <BuildTasksDirectory Condition=" '$(BuildTasksDirectory)' == ''">$(MSBuildProgramFiles32)\MSBuild\Microsoft\Dynamics\AX</BuildTasksDirectory>
+    <Model>ACX</Model>
+    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <OutputPath>bin</OutputPath>
+    <SchemaVersion>2.0</SchemaVersion>
+    <GenerateCrossReferences>True</GenerateCrossReferences>
+    <RunAppCheckerRules>False</RunAppCheckerRules>
+    <LogAppCheckerDiagsAsErrors>False</LogAppCheckerDiagsAsErrors>
+    <DeployOnline>False</DeployOnline>
+    <ProjectGuid>{3B9D6E21-8C4A-4F7B-B2E5-6A1D0C9F4E83}</ProjectGuid>
+    <Name>PMINSREC_ACX</Name>
+    <RootNamespace>PMINSREC_ACX</RootNamespace>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
+    <Configuration>Debug</Configuration>
+    <DBSyncInBuild>False</DBSyncInBuild>
+    <GenerateFormAdaptors>False</GenerateFormAdaptors>
+    <Company>
+    </Company>
+    <Partition>initial</Partition>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DataEntityExpandParentChildRelations>False</DataEntityExpandParentChildRelations>
+    <DataEntityUseLabelTextAsFieldName>False</DataEntityUseLabelTextAsFieldName>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Folder Include="Base Enums\" />
+    <Folder Include="Classes\" />
+    <Folder Include="Extended Data Types\" />
+    <Folder Include="Forms\" />
+    <Folder Include="Label Files\" />
+    <Folder Include="Menu Extensions\" />
+    <Folder Include="Menu Items\" />
+    <Folder Include="Menu Items\Action\" />
+    <Folder Include="Menu Items\Display\" />
+    <Folder Include="Menus\" />
+    <Folder Include="Security Privileges\" />
+    <Folder Include="Security Roles\" />
+    <Folder Include="Table Extensions\" />
+    <Folder Include="Tables\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="AxClass\PMINSRECCardImport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardImport</Name>
+      <Link>Classes\PMINSRECCardImport</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECFileFormatDefaults">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileFormatDefaults</Name>
+      <Link>Classes\PMINSRECFileFormatDefaults</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECFileReader">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileReader</Name>
+      <Link>Classes\PMINSRECFileReader</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECFormHelper">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFormHelper</Name>
+      <Link>Classes\PMINSRECFormHelper</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECIndividualReportImport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECIndividualReportImport</Name>
+      <Link>Classes\PMINSRECIndividualReportImport</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECJournalHelper">
+      <SubType>Content</SubType>
+      <Name>PMINSRECJournalHelper</Name>
+      <Link>Classes\PMINSRECJournalHelper</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECProcessEngine">
+      <SubType>Content</SubType>
+      <Name>PMINSRECProcessEngine</Name>
+      <Link>Classes\PMINSRECProcessEngine</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECReleaseManual">
+      <SubType>Content</SubType>
+      <Name>PMINSRECReleaseManual</Name>
+      <Link>Classes\PMINSRECReleaseManual</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECSettleHelper">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSettleHelper</Name>
+      <Link>Classes\PMINSRECSettleHelper</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECSettlementBuilder">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSettlementBuilder</Name>
+      <Link>Classes\PMINSRECSettlementBuilder</Link>
+    </Content>
+    <Content Include="AxClass\PMINSRECSummaryReport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSummaryReport</Name>
+      <Link>Classes\PMINSRECSummaryReport</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECCardImportLine">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardImportLine</Name>
+      <Link>Tables\PMINSRECCardImportLine</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECCardSettlement">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardSettlement</Name>
+      <Link>Tables\PMINSRECCardSettlement</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECFileFormat">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileFormat</Name>
+      <Link>Tables\PMINSRECFileFormat</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECImportLog">
+      <SubType>Content</SubType>
+      <Name>PMINSRECImportLog</Name>
+      <Link>Tables\PMINSRECImportLog</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECIndividualReport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECIndividualReport</Name>
+      <Link>Tables\PMINSRECIndividualReport</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECOutletSite">
+      <SubType>Content</SubType>
+      <Name>PMINSRECOutletSite</Name>
+      <Link>Tables\PMINSRECOutletSite</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECParameters">
+      <SubType>Content</SubType>
+      <Name>PMINSRECParameters</Name>
+      <Link>Tables\PMINSRECParameters</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECPostingSetup">
+      <SubType>Content</SubType>
+      <Name>PMINSRECPostingSetup</Name>
+      <Link>Tables\PMINSRECPostingSetup</Link>
+    </Content>
+    <Content Include="AxTable\PMINSRECSummaryTmp">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSummaryTmp</Name>
+      <Link>Tables\PMINSRECSummaryTmp</Link>
+    </Content>
+    <Content Include="AxTableExtension\CustTable.PMINSREC">
+      <SubType>Content</SubType>
+      <Name>CustTable.PMINSREC</Name>
+      <Link>Table Extensions\CustTable.PMINSREC</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECAccountNum">
+      <SubType>Content</SubType>
+      <Name>PMINSRECAccountNum</Name>
+      <Link>Extended Data Types\PMINSRECAccountNum</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECChassisNum">
+      <SubType>Content</SubType>
+      <Name>PMINSRECChassisNum</Name>
+      <Link>Extended Data Types\PMINSRECChassisNum</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECColumnName">
+      <SubType>Content</SubType>
+      <Name>PMINSRECColumnName</Name>
+      <Link>Extended Data Types\PMINSRECColumnName</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECDlrExecutive">
+      <SubType>Content</SubType>
+      <Name>PMINSRECDlrExecutive</Name>
+      <Link>Extended Data Types\PMINSRECDlrExecutive</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECEngineNum">
+      <SubType>Content</SubType>
+      <Name>PMINSRECEngineNum</Name>
+      <Link>Extended Data Types\PMINSRECEngineNum</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECFileName">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileName</Name>
+      <Link>Extended Data Types\PMINSRECFileName</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECOutletCode">
+      <SubType>Content</SubType>
+      <Name>PMINSRECOutletCode</Name>
+      <Link>Extended Data Types\PMINSRECOutletCode</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECPolicyNo">
+      <SubType>Content</SubType>
+      <Name>PMINSRECPolicyNo</Name>
+      <Link>Extended Data Types\PMINSRECPolicyNo</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECRegistrationNo">
+      <SubType>Content</SubType>
+      <Name>PMINSRECRegistrationNo</Name>
+      <Link>Extended Data Types\PMINSRECRegistrationNo</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECRequestId">
+      <SubType>Content</SubType>
+      <Name>PMINSRECRequestId</Name>
+      <Link>Extended Data Types\PMINSRECRequestId</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECText100">
+      <SubType>Content</SubType>
+      <Name>PMINSRECText100</Name>
+      <Link>Extended Data Types\PMINSRECText100</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECText255">
+      <SubType>Content</SubType>
+      <Name>PMINSRECText255</Name>
+      <Link>Extended Data Types\PMINSRECText255</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECText60">
+      <SubType>Content</SubType>
+      <Name>PMINSRECText60</Name>
+      <Link>Extended Data Types\PMINSRECText60</Link>
+    </Content>
+    <Content Include="AxEdt\PMINSRECTransactionId">
+      <SubType>Content</SubType>
+      <Name>PMINSRECTransactionId</Name>
+      <Link>Extended Data Types\PMINSRECTransactionId</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECCardBank">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardBank</Name>
+      <Link>Base Enums\PMINSRECCardBank</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECCardField">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardField</Name>
+      <Link>Base Enums\PMINSRECCardField</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECDebitCredit">
+      <SubType>Content</SubType>
+      <Name>PMINSRECDebitCredit</Name>
+      <Link>Base Enums\PMINSRECDebitCredit</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECImportType">
+      <SubType>Content</SubType>
+      <Name>PMINSRECImportType</Name>
+      <Link>Base Enums\PMINSRECImportType</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECInsuranceType">
+      <SubType>Content</SubType>
+      <Name>PMINSRECInsuranceType</Name>
+      <Link>Base Enums\PMINSRECInsuranceType</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECReportGroupBy">
+      <SubType>Content</SubType>
+      <Name>PMINSRECReportGroupBy</Name>
+      <Link>Base Enums\PMINSRECReportGroupBy</Link>
+    </Content>
+    <Content Include="AxEnum\PMINSRECStatus">
+      <SubType>Content</SubType>
+      <Name>PMINSRECStatus</Name>
+      <Link>Base Enums\PMINSRECStatus</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECCardImportLine">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardImportLine</Name>
+      <Link>Forms\PMINSRECCardImportLine</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECCardSettlement">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardSettlement</Name>
+      <Link>Forms\PMINSRECCardSettlement</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECCustChassis">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCustChassis</Name>
+      <Link>Forms\PMINSRECCustChassis</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECFileFormat">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileFormat</Name>
+      <Link>Forms\PMINSRECFileFormat</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECImportLog">
+      <SubType>Content</SubType>
+      <Name>PMINSRECImportLog</Name>
+      <Link>Forms\PMINSRECImportLog</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECIndividualReport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECIndividualReport</Name>
+      <Link>Forms\PMINSRECIndividualReport</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECOutletSite">
+      <SubType>Content</SubType>
+      <Name>PMINSRECOutletSite</Name>
+      <Link>Forms\PMINSRECOutletSite</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECParameters">
+      <SubType>Content</SubType>
+      <Name>PMINSRECParameters</Name>
+      <Link>Forms\PMINSRECParameters</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECPostingSetup">
+      <SubType>Content</SubType>
+      <Name>PMINSRECPostingSetup</Name>
+      <Link>Forms\PMINSRECPostingSetup</Link>
+    </Content>
+    <Content Include="AxForm\PMINSRECSummary">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSummary</Name>
+      <Link>Forms\PMINSRECSummary</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECCardImportLine">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardImportLine</Name>
+      <Link>Menu Items\Display\PMINSRECCardImportLine</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECCardSettlement">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardSettlement</Name>
+      <Link>Menu Items\Display\PMINSRECCardSettlement</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECCustChassis">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCustChassis</Name>
+      <Link>Menu Items\Display\PMINSRECCustChassis</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECFileFormat">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileFormat</Name>
+      <Link>Menu Items\Display\PMINSRECFileFormat</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECImportLog">
+      <SubType>Content</SubType>
+      <Name>PMINSRECImportLog</Name>
+      <Link>Menu Items\Display\PMINSRECImportLog</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECIndividualReport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECIndividualReport</Name>
+      <Link>Menu Items\Display\PMINSRECIndividualReport</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECOutletSite">
+      <SubType>Content</SubType>
+      <Name>PMINSRECOutletSite</Name>
+      <Link>Menu Items\Display\PMINSRECOutletSite</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECParameters">
+      <SubType>Content</SubType>
+      <Name>PMINSRECParameters</Name>
+      <Link>Menu Items\Display\PMINSRECParameters</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECPostingSetup">
+      <SubType>Content</SubType>
+      <Name>PMINSRECPostingSetup</Name>
+      <Link>Menu Items\Display\PMINSRECPostingSetup</Link>
+    </Content>
+    <Content Include="AxMenuItemDisplay\PMINSRECSummary">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSummary</Name>
+      <Link>Menu Items\Display\PMINSRECSummary</Link>
+    </Content>
+    <Content Include="AxMenuItemAction\PMINSRECCardImport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECCardImport</Name>
+      <Link>Menu Items\Action\PMINSRECCardImport</Link>
+    </Content>
+    <Content Include="AxMenuItemAction\PMINSRECFileFormatDefaults">
+      <SubType>Content</SubType>
+      <Name>PMINSRECFileFormatDefaults</Name>
+      <Link>Menu Items\Action\PMINSRECFileFormatDefaults</Link>
+    </Content>
+    <Content Include="AxMenuItemAction\PMINSRECIndividualReportImport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECIndividualReportImport</Name>
+      <Link>Menu Items\Action\PMINSRECIndividualReportImport</Link>
+    </Content>
+    <Content Include="AxMenuItemAction\PMINSRECProcess">
+      <SubType>Content</SubType>
+      <Name>PMINSRECProcess</Name>
+      <Link>Menu Items\Action\PMINSRECProcess</Link>
+    </Content>
+    <Content Include="AxMenuItemAction\PMINSRECReleaseManual">
+      <SubType>Content</SubType>
+      <Name>PMINSRECReleaseManual</Name>
+      <Link>Menu Items\Action\PMINSRECReleaseManual</Link>
+    </Content>
+    <Content Include="AxMenuItemAction\PMINSRECSummaryReport">
+      <SubType>Content</SubType>
+      <Name>PMINSRECSummaryReport</Name>
+      <Link>Menu Items\Action\PMINSRECSummaryReport</Link>
+    </Content>
+    <Content Include="AxMenu\PMINSRECInsuranceRecon">
+      <SubType>Content</SubType>
+      <Name>PMINSRECInsuranceRecon</Name>
+      <Link>Menus\PMINSRECInsuranceRecon</Link>
+    </Content>
+    <Content Include="AxMenuExtension\MainMenu.PMINSREC">
+      <SubType>Content</SubType>
+      <Name>MainMenu.PMINSREC</Name>
+      <Link>Menu Extensions\MainMenu.PMINSREC</Link>
+    </Content>
+    <Content Include="AxSecurityPrivilege\PMINSRECInsuranceReconMaintain">
+      <SubType>Content</SubType>
+      <Name>PMINSRECInsuranceReconMaintain</Name>
+      <Link>Security Privileges\PMINSRECInsuranceReconMaintain</Link>
+    </Content>
+    <Content Include="AxSecurityRole\PMINSRECInsuranceReconClerk">
+      <SubType>Content</SubType>
+      <Name>PMINSRECInsuranceReconClerk</Name>
+      <Link>Security Roles\PMINSRECInsuranceReconClerk</Link>
+    </Content>
+    <Content Include="AxLabelFile\PMINSREC_en-US">
+      <SubType>Content</SubType>
+      <Name>PMINSREC_en-US</Name>
+      <Link>Label Files\PMINSREC_en-US</Link>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath)\Microsoft\Dynamics\AX\Microsoft.Dynamics.Framework.Tools.BuildTasks.targets" />
+</Project>

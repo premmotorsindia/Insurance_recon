@@ -1,0 +1,75 @@
+﻿#,Object type,Object name,Local path (ACX model),TFVC server path (relative to Metadata)
+1,Class,PMINSRECCardImport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECCardImport.xml,Metadata/ACX/ACX/AxClass/PMINSRECCardImport.xml
+2,Class,PMINSRECFileFormatDefaults,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECFileFormatDefaults.xml,Metadata/ACX/ACX/AxClass/PMINSRECFileFormatDefaults.xml
+3,Class,PMINSRECFileReader,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECFileReader.xml,Metadata/ACX/ACX/AxClass/PMINSRECFileReader.xml
+4,Class,PMINSRECFormHelper,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECFormHelper.xml,Metadata/ACX/ACX/AxClass/PMINSRECFormHelper.xml
+5,Class,PMINSRECIndividualReportImport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECIndividualReportImport.xml,Metadata/ACX/ACX/AxClass/PMINSRECIndividualReportImport.xml
+6,Class,PMINSRECJournalHelper,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECJournalHelper.xml,Metadata/ACX/ACX/AxClass/PMINSRECJournalHelper.xml
+7,Class,PMINSRECProcessEngine,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECProcessEngine.xml,Metadata/ACX/ACX/AxClass/PMINSRECProcessEngine.xml
+8,Class,PMINSRECReleaseManual,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECReleaseManual.xml,Metadata/ACX/ACX/AxClass/PMINSRECReleaseManual.xml
+9,Class,PMINSRECSettleHelper,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECSettleHelper.xml,Metadata/ACX/ACX/AxClass/PMINSRECSettleHelper.xml
+10,Class,PMINSRECSettlementBuilder,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECSettlementBuilder.xml,Metadata/ACX/ACX/AxClass/PMINSRECSettlementBuilder.xml
+11,Class,PMINSRECSummaryReport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxClass\PMINSRECSummaryReport.xml,Metadata/ACX/ACX/AxClass/PMINSRECSummaryReport.xml
+12,Table,PMINSRECCardImportLine,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECCardImportLine.xml,Metadata/ACX/ACX/AxTable/PMINSRECCardImportLine.xml
+13,Table,PMINSRECCardSettlement,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECCardSettlement.xml,Metadata/ACX/ACX/AxTable/PMINSRECCardSettlement.xml
+14,Table,PMINSRECFileFormat,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECFileFormat.xml,Metadata/ACX/ACX/AxTable/PMINSRECFileFormat.xml
+15,Table,PMINSRECImportLog,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECImportLog.xml,Metadata/ACX/ACX/AxTable/PMINSRECImportLog.xml
+16,Table,PMINSRECIndividualReport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECIndividualReport.xml,Metadata/ACX/ACX/AxTable/PMINSRECIndividualReport.xml
+17,Table,PMINSRECOutletSite,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECOutletSite.xml,Metadata/ACX/ACX/AxTable/PMINSRECOutletSite.xml
+18,Table,PMINSRECParameters,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECParameters.xml,Metadata/ACX/ACX/AxTable/PMINSRECParameters.xml
+19,Table,PMINSRECPostingSetup,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECPostingSetup.xml,Metadata/ACX/ACX/AxTable/PMINSRECPostingSetup.xml
+20,Table,PMINSRECSummaryTmp,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTable\PMINSRECSummaryTmp.xml,Metadata/ACX/ACX/AxTable/PMINSRECSummaryTmp.xml
+21,Table extension,CustTable.PMINSREC,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxTableExtension\CustTable.PMINSREC.xml,Metadata/ACX/ACX/AxTableExtension/CustTable.PMINSREC.xml
+22,EDT,PMINSRECAccountNum,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECAccountNum.xml,Metadata/ACX/ACX/AxEdt/PMINSRECAccountNum.xml
+23,EDT,PMINSRECChassisNum,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECChassisNum.xml,Metadata/ACX/ACX/AxEdt/PMINSRECChassisNum.xml
+24,EDT,PMINSRECColumnName,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECColumnName.xml,Metadata/ACX/ACX/AxEdt/PMINSRECColumnName.xml
+25,EDT,PMINSRECDlrExecutive,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECDlrExecutive.xml,Metadata/ACX/ACX/AxEdt/PMINSRECDlrExecutive.xml
+26,EDT,PMINSRECEngineNum,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECEngineNum.xml,Metadata/ACX/ACX/AxEdt/PMINSRECEngineNum.xml
+27,EDT,PMINSRECFileName,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECFileName.xml,Metadata/ACX/ACX/AxEdt/PMINSRECFileName.xml
+28,EDT,PMINSRECOutletCode,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECOutletCode.xml,Metadata/ACX/ACX/AxEdt/PMINSRECOutletCode.xml
+29,EDT,PMINSRECPolicyNo,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECPolicyNo.xml,Metadata/ACX/ACX/AxEdt/PMINSRECPolicyNo.xml
+30,EDT,PMINSRECRegistrationNo,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECRegistrationNo.xml,Metadata/ACX/ACX/AxEdt/PMINSRECRegistrationNo.xml
+31,EDT,PMINSRECRequestId,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECRequestId.xml,Metadata/ACX/ACX/AxEdt/PMINSRECRequestId.xml
+32,EDT,PMINSRECText100,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECText100.xml,Metadata/ACX/ACX/AxEdt/PMINSRECText100.xml
+33,EDT,PMINSRECText255,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECText255.xml,Metadata/ACX/ACX/AxEdt/PMINSRECText255.xml
+34,EDT,PMINSRECText60,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECText60.xml,Metadata/ACX/ACX/AxEdt/PMINSRECText60.xml
+35,EDT,PMINSRECTransactionId,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEdt\PMINSRECTransactionId.xml,Metadata/ACX/ACX/AxEdt/PMINSRECTransactionId.xml
+36,Base enum,PMINSRECCardBank,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECCardBank.xml,Metadata/ACX/ACX/AxEnum/PMINSRECCardBank.xml
+37,Base enum,PMINSRECCardField,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECCardField.xml,Metadata/ACX/ACX/AxEnum/PMINSRECCardField.xml
+38,Base enum,PMINSRECDebitCredit,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECDebitCredit.xml,Metadata/ACX/ACX/AxEnum/PMINSRECDebitCredit.xml
+39,Base enum,PMINSRECImportType,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECImportType.xml,Metadata/ACX/ACX/AxEnum/PMINSRECImportType.xml
+40,Base enum,PMINSRECInsuranceType,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECInsuranceType.xml,Metadata/ACX/ACX/AxEnum/PMINSRECInsuranceType.xml
+41,Base enum,PMINSRECReportGroupBy,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECReportGroupBy.xml,Metadata/ACX/ACX/AxEnum/PMINSRECReportGroupBy.xml
+42,Base enum,PMINSRECStatus,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxEnum\PMINSRECStatus.xml,Metadata/ACX/ACX/AxEnum/PMINSRECStatus.xml
+43,Form,PMINSRECCardImportLine,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECCardImportLine.xml,Metadata/ACX/ACX/AxForm/PMINSRECCardImportLine.xml
+44,Form,PMINSRECCardSettlement,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECCardSettlement.xml,Metadata/ACX/ACX/AxForm/PMINSRECCardSettlement.xml
+45,Form,PMINSRECCustChassis,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECCustChassis.xml,Metadata/ACX/ACX/AxForm/PMINSRECCustChassis.xml
+46,Form,PMINSRECFileFormat,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECFileFormat.xml,Metadata/ACX/ACX/AxForm/PMINSRECFileFormat.xml
+47,Form,PMINSRECImportLog,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECImportLog.xml,Metadata/ACX/ACX/AxForm/PMINSRECImportLog.xml
+48,Form,PMINSRECIndividualReport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECIndividualReport.xml,Metadata/ACX/ACX/AxForm/PMINSRECIndividualReport.xml
+49,Form,PMINSRECOutletSite,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECOutletSite.xml,Metadata/ACX/ACX/AxForm/PMINSRECOutletSite.xml
+50,Form,PMINSRECParameters,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECParameters.xml,Metadata/ACX/ACX/AxForm/PMINSRECParameters.xml
+51,Form,PMINSRECPostingSetup,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECPostingSetup.xml,Metadata/ACX/ACX/AxForm/PMINSRECPostingSetup.xml
+52,Form,PMINSRECSummary,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxForm\PMINSRECSummary.xml,Metadata/ACX/ACX/AxForm/PMINSRECSummary.xml
+53,Menu item display,PMINSRECCardImportLine,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECCardImportLine.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECCardImportLine.xml
+54,Menu item display,PMINSRECCardSettlement,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECCardSettlement.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECCardSettlement.xml
+55,Menu item display,PMINSRECCustChassis,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECCustChassis.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECCustChassis.xml
+56,Menu item display,PMINSRECFileFormat,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECFileFormat.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECFileFormat.xml
+57,Menu item display,PMINSRECImportLog,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECImportLog.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECImportLog.xml
+58,Menu item display,PMINSRECIndividualReport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECIndividualReport.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECIndividualReport.xml
+59,Menu item display,PMINSRECOutletSite,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECOutletSite.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECOutletSite.xml
+60,Menu item display,PMINSRECParameters,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECParameters.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECParameters.xml
+61,Menu item display,PMINSRECPostingSetup,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECPostingSetup.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECPostingSetup.xml
+62,Menu item display,PMINSRECSummary,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemDisplay\PMINSRECSummary.xml,Metadata/ACX/ACX/AxMenuItemDisplay/PMINSRECSummary.xml
+63,Menu item action,PMINSRECCardImport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemAction\PMINSRECCardImport.xml,Metadata/ACX/ACX/AxMenuItemAction/PMINSRECCardImport.xml
+64,Menu item action,PMINSRECFileFormatDefaults,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemAction\PMINSRECFileFormatDefaults.xml,Metadata/ACX/ACX/AxMenuItemAction/PMINSRECFileFormatDefaults.xml
+65,Menu item action,PMINSRECIndividualReportImport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemAction\PMINSRECIndividualReportImport.xml,Metadata/ACX/ACX/AxMenuItemAction/PMINSRECIndividualReportImport.xml
+66,Menu item action,PMINSRECProcess,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemAction\PMINSRECProcess.xml,Metadata/ACX/ACX/AxMenuItemAction/PMINSRECProcess.xml
+67,Menu item action,PMINSRECReleaseManual,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemAction\PMINSRECReleaseManual.xml,Metadata/ACX/ACX/AxMenuItemAction/PMINSRECReleaseManual.xml
+68,Menu item action,PMINSRECSummaryReport,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuItemAction\PMINSRECSummaryReport.xml,Metadata/ACX/ACX/AxMenuItemAction/PMINSRECSummaryReport.xml
+69,Menu,PMINSRECInsuranceRecon,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenu\PMINSRECInsuranceRecon.xml,Metadata/ACX/ACX/AxMenu/PMINSRECInsuranceRecon.xml
+70,Menu extension,MainMenu.PMINSREC,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxMenuExtension\MainMenu.PMINSREC.xml,Metadata/ACX/ACX/AxMenuExtension/MainMenu.PMINSREC.xml
+71,Security privilege,PMINSRECInsuranceReconMaintain,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxSecurityPrivilege\PMINSRECInsuranceReconMaintain.xml,Metadata/ACX/ACX/AxSecurityPrivilege/PMINSRECInsuranceReconMaintain.xml
+72,Security role,PMINSRECInsuranceReconClerk,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxSecurityRole\PMINSRECInsuranceReconClerk.xml,Metadata/ACX/ACX/AxSecurityRole/PMINSRECInsuranceReconClerk.xml
+73,Label file,PMINSREC label text (en-US),K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\LabelResources\en-US\PMINSREC.en-US.label.txt,Metadata/ACX/ACX/AxLabelFile/LabelResources/en-US/PMINSREC.en-US.label.txt
+74,Label file,PMINSREC_en-US,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\PMINSREC_en-US.xml,Metadata/ACX/ACX/AxLabelFile/PMINSREC_en-US.xml
