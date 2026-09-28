@@ -108,10 +108,10 @@ public class PMINSRECPostingSetup extends common
             return checkFailed(strFmt("Journal name %1 does not exist.", _journalName));
         }
 
-        if (ledgerJournalName.JournalType != LedgerJournalType::Purch)
+        if (ledgerJournalName.JournalType != LedgerJournalType::PurchaseLedger)
         {
             return checkFailed(strFmt("Journal name %1 must be a vendor invoice journal (journal type %2).",
-                _journalName, LedgerJournalType::Purch));
+                _journalName, LedgerJournalType::PurchaseLedger));
         }
 
         return true;

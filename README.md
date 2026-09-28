@@ -64,8 +64,8 @@ only after **Release manual line**.
 ## Points to verify on the first build
 
 - `CustTable.ChassisNum` is a new field added by the table extension `CustTable.PMINSREC`.
-- Settlement uses `VendTrans::settleTransaction(SpecTransExecutionContext, VendTransSettleTransactionParameters)`
-  (10.0.40 API).
+- Settlement marks the open transactions with `SpecTransManager` and settles them with
+  `VendTrans::settleTransact(vendTable, null, true, SettleDatePrinc::DaysDate, <latest transaction date>)`.
 - JV1 and JV2 are vendor invoice journals (VJV). No offset accounts are used: every voucher has a separate debit
   line and credit line (plus the discount line for a renewal with a difference). Check that the VJV journal name
   allows multi-line vouchers with customer / bank / ledger lines.

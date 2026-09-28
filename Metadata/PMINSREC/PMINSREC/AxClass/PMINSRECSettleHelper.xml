@@ -49,6 +49,7 @@ public final class PMINSRECSettleHelper
         SetEnumerator             enumerator = _vendTransRecIds.getEnumerator();
         VendTransOpen             vendTransOpen;
         VendTrans                 vendTrans;
+        TransDate                 settleDate;
         int                       marked;
 
         if (!vendTable)
@@ -61,7 +62,8 @@ public final class PMINSRECSettleHelper
 
         while (enumerator.moveNext())
         {
-            vendTrans = VendTrans::find(enumerator.current());
+            vendTrans  = VendTrans::find(enumerator.current());
+            settleDate = max(settleDate, vendTrans.TransDate);
 
             while select vendTransOpen
                 where vendTransOpen.RefRecId   == vendTrans.RecId
@@ -82,7 +84,8 @@ public final class PMINSRECSettleHelper
             return false;
         }
 
-        VendTrans::settleTransaction(specTransExecutionContext, VendTransSettleTransactionParameters::construct());
+        // settle the marked transactions on the date of the latest transaction
+        VendTrans::settleTransact(vendTable, null, true, SettleDatePrinc::DaysDate, settleDate);
 
         return true;
     }
