@@ -73,3 +73,5 @@
 72,Security role,PMINSRECInsuranceReconClerk,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxSecurityRole\PMINSRECInsuranceReconClerk.xml,Metadata/ACX/ACX/AxSecurityRole/PMINSRECInsuranceReconClerk.xml
 73,Label file,PMINSREC label text (en-US),K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\LabelResources\en-US\PMINSREC.en-US.label.txt,Metadata/ACX/ACX/AxLabelFile/LabelResources/en-US/PMINSREC.en-US.label.txt
 74,Label file,PMINSREC_en-US,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\PMINSREC_en-US.xml,Metadata/ACX/ACX/AxLabelFile/PMINSREC_en-US.xml
+75,Label file,PMINSREC_en-IN,K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\PMINSREC_en-IN.xml,Metadata/ACX/ACX/AxLabelFile/PMINSREC_en-IN.xml
+76,Label file,PMINSREC label text (en-IN),K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\LabelResources\en-IN\PMINSREC.en-IN.label.txt,Metadata/ACX/ACX/AxLabelFile/LabelResources/en-IN/PMINSREC.en-IN.label.txt

@@ -413,6 +413,11 @@
       <Name>PMINSREC_en-US</Name>
       <Link>Label Files\PMINSREC_en-US</Link>
     </Content>
+    <Content Include="AxLabelFile\PMINSREC_en-IN">
+      <SubType>Content</SubType>
+      <Name>PMINSREC_en-IN</Name>
+      <Link>Label Files\PMINSREC_en-IN</Link>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\Dynamics\AX\Microsoft.Dynamics.Framework.Tools.BuildTasks.targets" />
 </Project>

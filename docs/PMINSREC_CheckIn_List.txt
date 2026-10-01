@@ -72,3 +72,5 @@ K:\AosService\PackagesLocalDirectory\ACX\ACX\AxSecurityPrivilege\PMINSRECInsuran
 K:\AosService\PackagesLocalDirectory\ACX\ACX\AxSecurityRole\PMINSRECInsuranceReconClerk.xml
 K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\LabelResources\en-US\PMINSREC.en-US.label.txt
 K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\PMINSREC_en-US.xml
+K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\PMINSREC_en-IN.xml
+K:\AosService\PackagesLocalDirectory\ACX\ACX\AxLabelFile\LabelResources\en-IN\PMINSREC.en-IN.label.txt

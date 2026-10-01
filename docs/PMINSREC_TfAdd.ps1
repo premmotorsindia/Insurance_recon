@@ -75,7 +75,9 @@ $files = @(
     "AxSecurityPrivilege\PMINSRECInsuranceReconMaintain.xml",
     "AxSecurityRole\PMINSRECInsuranceReconClerk.xml",
     "AxLabelFile\LabelResources\en-US\PMINSREC.en-US.label.txt",
-    "AxLabelFile\PMINSREC_en-US.xml"
+    "AxLabelFile\PMINSREC_en-US.xml",
+    "AxLabelFile\PMINSREC_en-IN.xml",
+    "AxLabelFile\LabelResources\en-IN\PMINSREC.en-IN.label.txt"
 )
 $missing = $files | Where-Object { -not (Test-Path (Join-Path $base $_)) }
 if ($missing) { Write-Host "Missing files (copy them first):" -ForegroundColor Red; $missing; return }
