@@ -124,7 +124,9 @@ public final class PMINSRECCardImport
 
             if (importLine.isDuplicate())
             {
+                // not inserted again, but the grid line is rebuilt (e.g. when it was deleted)
                 importLog.RowsDuplicate++;
+                requestIds.add(importLine.RequestId);
                 continue;
             }
 
