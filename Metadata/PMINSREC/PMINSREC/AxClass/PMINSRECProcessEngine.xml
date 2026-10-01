@@ -55,6 +55,7 @@ public final class PMINSRECProcessEngine
     {
         parameters = PMINSRECParameters::find();
 
+        this.retryPosting();
         this.createJV1();
         this.updatePostedJV1();
         this.createJV2();
@@ -62,6 +63,46 @@ public final class PMINSRECProcessEngine
 
         info(strFmt("Card settlement: %1 JV1 lines, %2 JV2 lines, %3 settled, %4 waiting for receipt / customer, %5 errors.",
             countJV1, countJV2, countSettled, countPending, countError));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>retryPosting</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// With auto post and settle: posts again the JV1 / JV2 journals of earlier runs that are not posted yet
+    /// (e.g. posting failed because of a missing posting profile and the setup is corrected now).
+    /// </summary>
+    private void retryPosting()
+    {
+        PMINSRECCardSettlement settlement;
+        Set                    jv1Journals = new Set(Types::String);
+        Set                    jv2Journals = new Set(Types::String);
+
+        if (!parameters.AutoPostSettle)
+        {
+            return;
+        }
+
+        while select JV1JournalNum, JV2JournalNum, JV1Posted, JV2Posted from settlement
+            where settlement.Status != PMINSRECStatus::Manual
+               && ((settlement.JV1JournalNum != '' && settlement.JV1Posted == NoYes::No)
+                || (settlement.JV2JournalNum != '' && settlement.JV2Posted == NoYes::No))
+        {
+            if (settlement.JV1JournalNum && !settlement.JV1Posted && !PMINSRECJournalHelper::isPosted(settlement.JV1JournalNum))
+            {
+                jv1Journals.add(settlement.JV1JournalNum);
+            }
+
+            if (settlement.JV2JournalNum && !settlement.JV2Posted && !PMINSRECJournalHelper::isPosted(settlement.JV2JournalNum))
+            {
+                jv2Journals.add(settlement.JV2JournalNum);
+            }
+        }
+
+        this.postJournals(jv1Journals, fieldNum(PMINSRECCardSettlement, JV1JournalNum));
+        this.postJournals(jv2Journals, fieldNum(PMINSRECCardSettlement, JV2JournalNum));
     }
 
 ]]></Source>
