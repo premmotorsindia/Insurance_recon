@@ -1,0 +1,377 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxTable xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PremPOSSettlementStaging</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+public class PremPOSSettlementStaging extends common
+{
+}
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>initValue</Name>
+				<Source><![CDATA[
+    /// <summary>
+    ///
+    /// </summary>
+    public void initValue()
+    {
+        super();
+        this.Reconciled       = NoYes::No;
+        this.MSFPosted        = NoYes::No;
+        this.IsIntraState     = NoYes::Yes;
+        this.ImportDateTime   = DateTimeUtil::utcNow();
+        this.ImportedBy       = curUserId();
+        this.CreatedUserId    = curUserId();
+        this.TransCreatedDateTime  = DateTimeUtil::utcNow();
+
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+	<SubscriberAccessLevel>
+		<Read>Allow</Read>
+	</SubscriberAccessLevel>
+	<CacheLookup>NotInTTS</CacheLookup>
+	<DeleteActions />
+	<FieldGroups>
+		<AxTableFieldGroup>
+			<Name>AutoReport</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoLookup</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoIdentification</Name>
+			<AutoPopulate>Yes</AutoPopulate>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoSummary</Name>
+			<Fields />
+		</AxTableFieldGroup>
+		<AxTableFieldGroup>
+			<Name>AutoBrowse</Name>
+			<Fields />
+		</AxTableFieldGroup>
+	</FieldGroups>
+	<Fields>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>BatchNo</Name>
+			<ExtendedDataType>PremBatchNo</ExtendedDataType>
+			<HelpText>Acquirer settlement batch.</HelpText>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Batch number</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>TerminalId</Name>
+			<ExtendedDataType>PremTerminalId</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Terminal ID</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>MerchantId</Name>
+			<Label>Merchant code</Label>
+			<StringSize>20</StringSize>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>GrossAmount</Name>
+			<ExtendedDataType>AmountCur</ExtendedDataType>
+			<HelpText>Card sales before the merchant service fee.</HelpText>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Gross amount</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>MSFCharge</Name>
+			<ExtendedDataType>AmountCur</ExtendedDataType>
+			<HelpText>Merchant service fee the acquirer deducted.</HelpText>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>MSF charge</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>GSTAmount</Name>
+			<ExtendedDataType>AmountCur</ExtendedDataType>
+			<HelpText>GST charged on the merchant service fee.</HelpText>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>GST amount</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>NetSettlement</Name>
+			<ExtendedDataType>AmountCur</ExtendedDataType>
+			<HelpText>Amount actually credited to the bank. The statement line must equal this.</HelpText>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Net settlement</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>RefundAmount</Name>
+			<ExtendedDataType>AmountCur</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Refund amount</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldDate">
+			<Name>SettlementDate</Name>
+			<Label>Settlement date</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldDate">
+			<Name>TxnDate</Name>
+			<Label>Transaction date</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldUtcDateTime">
+			<Name>SettlementDateTime</Name>
+			<Label>Settlement date/time</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>BankAccountId</Name>
+			<ExtendedDataType>BankAccountID</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Bank account</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldEnum">
+			<Name>IsIntraState</Name>
+			<HelpText>Yes means CGST and SGST; No means IGST.</HelpText>
+			<Label>Intra-state</Label>
+			<EnumType>NoYes</EnumType>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>CGSTAmount</Name>
+			<ExtendedDataType>TaxAmount</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>CGST</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>SGSTAmount</Name>
+			<ExtendedDataType>TaxAmount</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>SGST</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldReal">
+			<Name>IGSTAmount</Name>
+			<ExtendedDataType>TaxAmount</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>IGST</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldEnum">
+			<Name>Reconciled</Name>
+			<Label>Reconciled</Label>
+			<EnumType>NoYes</EnumType>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldEnum">
+			<Name>MSFPosted</Name>
+			<Label>MSF posted</Label>
+			<EnumType>NoYes</EnumType>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldInt64">
+			<Name>ReconciledStagingId</Name>
+			<ExtendedDataType>RefRecId</ExtendedDataType>
+			<HelpText>Bank statement line this settlement row was matched to.</HelpText>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Reconciled statement line</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>MSFJournalNum</Name>
+			<ExtendedDataType>LedgerJournalId</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>MSF journal</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>SettlementJournalNum</Name>
+			<ExtendedDataType>BatchJournalId</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Settlement journal</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>BranchCode</Name>
+			<Label>Outlet code</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldInt64">
+			<Name>LedgerAccount</Name>
+			<ExtendedDataType>LedgerDimensionAccount</ExtendedDataType>
+			<HelpText>Account the charge row posts to, taken from the terminal mapping.</HelpText>
+			<Label>Ledger account</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>ImportFilePath</Name>
+			<ExtendedDataType>PremFilePath</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Source file</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldUtcDateTime">
+			<Name>ImportDateTime</Name>
+			<Label>Imported on</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>ImportedBy</Name>
+			<ExtendedDataType>UserId</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Imported by</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>BatchRunId</Name>
+			<ExtendedDataType>PremBatchRunId</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Batch run ID</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>CreatedUserId</Name>
+			<ExtendedDataType>UserId</ExtendedDataType>
+			<IgnoreEDTRelation>Yes</IgnoreEDTRelation>
+			<Label>Created by</Label>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldUtcDateTime">
+			<Name>TransCreatedDateTime</Name>
+			<Label>Created on</Label>
+		</AxTableField>
+			<AxTableField xmlns=""
+			i:type="AxTableFieldEnum">
+			<Name>RecordType</Name>
+			<HelpText>Sale rows settle against the bank; charge rows carry the merchant service fee.</HelpText>
+			<Label>Record type</Label>
+			<EnumType>PremPOSRecordType</EnumType>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>RecordFormat</Name>
+			<HelpText>Format code from the acquirer file, such as SALE or REC.</HelpText>
+			<Label>Record format</Label>
+			<StringSize>10</StringSize>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>CardType</Name>
+			<Label>Card type</Label>
+			<StringSize>60</StringSize>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>ApprovalCode</Name>
+			<Label>Approval code</Label>
+			<StringSize>20</StringSize>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>ARNNo</Name>
+			<HelpText>Acquirer reference number.</HelpText>
+			<Label>ARN number</Label>
+			<StringSize>40</StringSize>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldEnum">
+			<Name>Provider</Name>
+			<HelpText>Acquirer whose settlement file the row came from, recognised from the file's header row.</HelpText>
+			<Label>POS provider</Label>
+			<EnumType>PremPOSProvider</EnumType>
+		</AxTableField>
+		<AxTableField xmlns=""
+			i:type="AxTableFieldString">
+			<Name>UTRNumber</Name>
+			<HelpText>UTR / RRN of the UPI transaction, used to match the bank statement.</HelpText>
+			<Label>UTR / RRN</Label>
+			<StringSize>40</StringSize>
+		</AxTableField>
+</Fields>
+	<FullTextIndexes />
+	<Indexes>
+		<AxTableIndex>
+			<Name>Idx_Batch</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>BatchNo</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>BankAccountId</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>dx_Reconciliation</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>BankAccountId</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>SettlementDate</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>Reconciled</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>Idx_MSF</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>BankAccountId</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>SettlementDate</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>MSFPosted</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>Idx_ProviderRef</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>Provider</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>TerminalId</DataField>
+				</AxTableIndexField>
+				<AxTableIndexField>
+					<DataField>ARNNo</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+		<AxTableIndex>
+			<Name>Idx_UTR</Name>
+			<AllowDuplicates>Yes</AllowDuplicates>
+			<Fields>
+				<AxTableIndexField>
+					<DataField>UTRNumber</DataField>
+				</AxTableIndexField>
+			</Fields>
+		</AxTableIndex>
+	</Indexes>
+	<Mappings />
+	<Relations />
+	<StateMachines />
+</AxTable>

@@ -1,0 +1,1581 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PremPOSReconciliation</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+using System.IO;
+using OfficeOpenXml;
+using OfficeOpenXml.ExcelPackage;
+using OfficeOpenXml.ExcelRange;
+
+// <summary>
+// Imports a POS settlement file into PremPOSSettlementStaging and builds the
+// consolidated MSF+GST journal for the day (Rule R-12).
+// The acquirer is recognised from the header row: PineLabs (.xlsx), PhonePe (.csv),
+// MobiKwik (.xlsx) and PayZapp (.xlsx). All four land in the same staging table, so
+// terminal mapping, MSF journal and bank matching work the same way for each.
+// Uses EPPlus (OfficeOpenXml) - the PU66-supported Excel library in this environment.
+// POS XLSX format: row 1 = headers, row 2+ = data.
+// Columns: BatchNo | TID | TxnDate | GrossAmount | MSF | GST | NetAmount | UTR
+// </summary>
+public class PremPOSReconciliation
+{
+    private const int       HEADER_ROW       = 1;
+    private const int       MIN_DATA_ROW     = 2;
+
+    // Column positions are resolved from the header text, not hardcoded: the PineLabs /
+    // acquirer export carries 30+ columns and their order is not guaranteed between files.
+    private int colMerchant, colTid, colRecFmt, colBatchNo, colCardType;
+    private int colTxnDate, colSettleDate, colApprovCode;
+    private int colIntlAmt, colDomesticAmt, colMSF;
+    private int colCGST, colSGST, colIGST, colUTGST;
+    private int colNetAmt, colDrCrType, colARN;
+
+    private PremBatchRunId      batchRunId;
+    private TransDate           settlementDate;
+    private str                 sourceFileName;
+    private int                 rowsImported;
+    private int                 rowsErrored;
+    private int                 lastRowIdx;         // Diagnostics: row currently being read
+    private Set                 unmappedTerminals = new Set(Types::String);
+    private str                 lastRawCellValue;   // Diagnostics: raw value that was being parsed
+
+    // UPI acquirers (PhonePe, MobiKwik, PayZapp). PineLabs keeps the columns above.
+    private PremPOSProvider     provider;
+    private int colStatus, colUTR, colTxnRef, colTxnType, colPayoutBatch, colPayoutDate;
+    private int                 rowsSkipped;        // status not successful
+    private int                 rowsAwaitingPayout; // MobiKwik rows not yet paid out
+    private int                 rowsDuplicate;      // already imported from an earlier file
+}
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>new</Name>
+				<Source><![CDATA[
+    public void new(PremBatchRunId _batchRunId, TransDate _settlementDate)
+    {
+        batchRunId     = _batchRunId;
+        settlementDate = _settlementDate;
+        rowsImported   = 0;
+        rowsErrored    = 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>importFromStream</Name>
+				<Source><![CDATA[
+    public void importFromStream(System.IO.Stream _stream, str _sourceFileName)
+    {
+        sourceFileName = _sourceFileName;
+
+        if (_stream == null || !_stream.CanRead)
+        {
+            throw error(strFmt("POS stream not readable for: %1", _sourceFileName));
+        }
+
+        try
+        {
+            // PhonePe exports a .csv; it is loaded into an in-memory sheet so the rest of
+            // the import reads it exactly like an .xlsx.
+            if (this.isCsvFile(_sourceFileName))
+            {
+                using (ExcelPackage csvPackage = new ExcelPackage())
+                {
+                    this.processWorksheet(this.loadCsv(csvPackage, _stream));
+                }
+            }
+            else
+            {
+                using (ExcelPackage package = new ExcelPackage(_stream))
+                {
+                    ExcelWorksheet worksheet;
+
+                    package.Load(_stream);
+                    worksheet = package.get_Workbook().get_Worksheets().get_Item(1);
+
+                    if (worksheet == null || package.get_Workbook().get_Worksheets().get_Count() == 0)
+                    {
+                        // Files exported by some POS portals declare the draft ECMA namespace
+                        // "http://purl.oclc.org/ooxml/spreadsheetml/main" instead of the
+                        // standard "...openxmlformats.org/spreadsheetml/2006/main". EPPlus then
+                        // parses the package but finds no sheets, so the cause is the file, not
+                        // the data - re-saving it from Excel rewrites the namespace correctly.
+                        throw error(strFmt(
+                            "POS file '%1' contains no readable worksheet. If it came straight "
+                            + "from the POS portal, open it in Excel and use Save As > Excel "
+                            + "Workbook (.xlsx) to rewrite it in the standard format.",
+                            _sourceFileName));
+                    }
+
+                    this.processWorksheet(worksheet);
+                }
+            }
+        }
+        catch (Exception::CLRError)
+        {
+            System.Exception clrEx = CLRInterop::getLastException();
+
+            // Unwrap TargetInvocationException - its own message is always the generic
+            // "Exception has been thrown by the target of an invocation."
+            while (clrEx != null && clrEx.get_InnerException() != null)
+            {
+                clrEx = clrEx.get_InnerException();
+            }
+
+            str rootMessage = clrEx != null ? clrEx.get_Message() : "Unknown CLR error";
+
+            PremBankRecAuditLog::logEvent(
+                0,
+                "POS_IMPORT_FAILED",
+                strFmt("Row %1 value[%2]: %3 | Batch:%4",
+                    lastRowIdx, lastRawCellValue, rootMessage, batchRunId));
+            throw error(strFmt("POS XLSX parse failed: %1 (row %2) - %3",
+                _sourceFileName, lastRowIdx, rootMessage));
+        }
+
+        PremBankRecAuditLog::logEvent(
+            0,
+            "POS_IMPORT_COMPLETE",
+            strFmt("BatchRunId:%1 | Imported:%2 | Errors:%3", batchRunId, rowsImported, rowsErrored));
+
+        this.reportImportSummary();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>reportImportSummary</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Say on screen what the import took in and what it could not place.
+    // </summary>
+    // <remarks>
+    // The counts used to go only to the audit trail, so a file that imported with every
+    // terminal unmapped looked exactly like a clean one.
+    // </remarks>
+    private void reportImportSummary()
+    {
+        PremPOSSettlementStaging posStg;
+        int sales, charges, refunds, unmapped;
+
+        select count(RecId) from posStg
+            where posStg.BatchRunId == batchRunId
+               && posStg.RecordType == PremPOSRecordType::Sale;
+        sales = posStg.RecId;
+
+        select count(RecId) from posStg
+            where posStg.BatchRunId == batchRunId
+               && posStg.RecordType == PremPOSRecordType::Charge;
+        charges = posStg.RecId;
+
+        select count(RecId) from posStg
+            where posStg.BatchRunId == batchRunId
+               && posStg.RecordType == PremPOSRecordType::Refund;
+        refunds = posStg.RecId;
+
+        select count(RecId) from posStg
+            where posStg.BatchRunId    == batchRunId
+               && posStg.BankAccountId == '';
+        unmapped = posStg.RecId;
+
+        info(strFmt("POS import complete (%6 file): %1 row(s) imported - %2 sale, %3 charge, %4 refund. Errors: %5.",
+            rowsImported, sales, charges, refunds, rowsErrored, enum2Str(provider)));
+
+        if (rowsDuplicate)
+        {
+            info(strFmt("%1 row(s) were already imported from an earlier file and were skipped.", rowsDuplicate));
+        }
+
+        if (rowsSkipped)
+        {
+            info(strFmt("%1 row(s) skipped because the transaction status is not successful.", rowsSkipped));
+        }
+
+        if (rowsAwaitingPayout)
+        {
+            warning(strFmt("%1 row(s) have no payout batch yet and were skipped. They import with the "
+                + "next file that carries their payout.", rowsAwaitingPayout));
+        }
+
+        if (unmapped)
+        {
+            SetEnumerator terminalEnum = unmappedTerminals.getEnumerator();
+            str           terminalList;
+            int           terminalCount;
+
+            while (terminalEnum.moveNext())
+            {
+                terminalList += (terminalList ? ', ' : '') + terminalEnum.current();
+                terminalCount++;
+            }
+
+            warning(strFmt("%1 row(s) across %2 terminal(s) have no POS terminal mapping, so no bank "
+                + "account or ledger could be resolved for them.", unmapped, terminalCount));
+
+            warning(strFmt("Add these terminals in POS terminal mapping, then re-import: %1", terminalList));
+        }
+
+        if (rowsErrored)
+        {
+            warning(strFmt("%1 row(s) failed to import. See the audit log entries of type POS_ROW_ERROR.",
+                rowsErrored));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>importFromFileUpload</Name>
+				<Source><![CDATA[
+    public void importFromFileUpload(FileUploadTemporaryStorageResult _uploadResult)
+    {
+        System.IO.Stream stream;
+
+        if (_uploadResult == null || !_uploadResult.getUploadStatus())
+        {
+            throw error("POS file upload failed.");
+        }
+
+        stream = _uploadResult.openResult();
+        this.importFromStream(stream, _uploadResult.getFileName());
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>importFromBlobUrl</Name>
+				<Source><![CDATA[
+    public void importFromBlobUrl(str _blobUrlWithSas)
+    {
+        System.Net.WebClient    webClient;
+        System.IO.MemoryStream  memoryStream;
+        System.Byte[]           fileBytes;
+
+        try
+        {
+            webClient    = new System.Net.WebClient();
+            fileBytes    = webClient.DownloadData(_blobUrlWithSas);
+            memoryStream = new System.IO.MemoryStream(fileBytes);
+
+            this.importFromStream(memoryStream, _blobUrlWithSas);
+        }
+        finally
+        {
+            if (webClient    != null) { webClient.Dispose(); }
+            if (memoryStream != null) { memoryStream.Dispose(); }
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>processWorksheet</Name>
+				<Source><![CDATA[
+    private void processWorksheet(ExcelWorksheet _worksheet)
+    {
+        int rowIdx, endRow;
+
+        if (_worksheet.Dimension == null)
+        {
+            throw error("POS file: sheet data missing.");
+        }
+
+        endRow = _worksheet.Dimension.End.Row;
+
+        this.resolveColumns(_worksheet);
+
+        // One transaction per row: a single bad row must not doom the whole batch.
+        for (rowIdx = MIN_DATA_ROW; rowIdx <= endRow; rowIdx++)
+        {
+            try
+            {
+                ttsbegin;
+
+                if (this.processDataRow(_worksheet, rowIdx))
+                {
+                    rowsImported++;
+                }
+
+                ttscommit;
+            }
+            catch (Exception::CLRError)
+            {
+                System.Exception rowEx = CLRInterop::getLastException();
+                while (rowEx != null && rowEx.get_InnerException() != null)
+                {
+                    rowEx = rowEx.get_InnerException();
+                }
+
+                ttsabort;
+                rowsErrored++;
+                PremBankRecAuditLog::logEvent(
+                    0,
+                    "POS_ROW_ERROR",
+                    strFmt("Row %1 value[%2]: %3 | Batch:%4", rowIdx, lastRawCellValue,
+                        rowEx != null ? rowEx.get_Message() : "Unknown CLR error", batchRunId));
+            }
+            catch (Exception::Error)
+            {
+                ttsabort;
+                rowsErrored++;
+                PremBankRecAuditLog::logEvent(
+                    0,
+                    "POS_ROW_ERROR",
+                    strFmt("Row %1 value[%2] failed | Batch:%3",
+                        rowIdx, lastRawCellValue, batchRunId));
+            }
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>resolveColumns</Name>
+				<Source><![CDATA[
+    // Map header captions to column numbers. Called once per file, before the row loop.
+    // The header row also tells which acquirer produced the file.
+    private void resolveColumns(ExcelWorksheet _worksheet)
+    {
+        int colIdx, lastCol;
+        str head;
+        Map headers = this.readHeaders(_worksheet);
+
+        provider = this.detectProvider(headers);
+
+        if (provider != PremPOSProvider::PineLabs)
+        {
+            this.resolveProviderColumns(headers);
+            return;
+        }
+
+        lastCol = _worksheet.Dimension.End.Column;
+
+        for (colIdx = 1; colIdx <= lastCol; colIdx++)
+        {
+            head = strUpr(strLRTrim(_worksheet.Cells.get_Item(HEADER_ROW, colIdx).Text));
+
+            if      (head == 'MERCHANT CODE')                             { colMerchant     = colIdx; }
+            else if (head == 'TERMINAL NUMBER' || head == 'TID')          { colTid          = colIdx; }
+            else if (head == 'REC FMT')                                   { colRecFmt       = colIdx; }
+            else if (head == 'BAT NBR'         || head == 'BATCH NUMBER') { colBatchNo      = colIdx; }
+            else if (head == 'CARD TYPE')                                 { colCardType     = colIdx; }
+            else if (head == 'TRANS DATE')                                { colTxnDate      = colIdx; }
+            else if (head == 'SETTLE DATE')                               { colSettleDate   = colIdx; }
+            else if (head == 'APPROV CODE')                               { colApprovCode   = colIdx; }
+            else if (head == 'INTNL AMT')                                 { colIntlAmt      = colIdx; }
+            else if (head == 'DOMESTIC AMT')                              { colDomesticAmt  = colIdx; }
+            else if (head == 'MSF')                                       { colMSF          = colIdx; }
+            else if (head == 'CGST AMT')                                  { colCGST         = colIdx; }
+            else if (head == 'SGST AMT')                                  { colSGST         = colIdx; }
+            else if (head == 'IGST AMT')                                  { colIGST         = colIdx; }
+            else if (head == 'UTGST AMT')                                 { colUTGST        = colIdx; }
+            else if (head == 'NET AMOUNT')                                { colNetAmt       = colIdx; }
+            else if (head == 'DEBITCREDIT_TYPE')                          { colDrCrType     = colIdx; }
+            else if (head == 'ARN NO')                                    { colARN          = colIdx; }
+        }
+
+        // Without a terminal and an amount there is nothing to reconcile against.
+        if (!colTid || (!colDomesticAmt && !colIntlAmt))
+        {
+            throw error(strFmt(
+                "POS file '%1': expected column headers not found in row %2. "
+                + "Required at least 'TERMINAL NUMBER' and 'DOMESTIC AMT'/'INTNL AMT' (PineLabs), "
+                + "'PhonePe Reference Id' (PhonePe), 'Smid' + 'Utr Number' (MobiKwik) or "
+                + "'External MID' + 'MSF Amount' (PayZapp).",
+                sourceFileName, HEADER_ROW));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>cellAt</Name>
+				<Source><![CDATA[
+    // Column-aware read: returns blank when the header was absent from this file, and
+    // strips the leading apostrophe the acquirer uses to force text formatting.
+    private str cellAt(ExcelWorksheet _worksheet, int _rowIdx, int _colIdx)
+    {
+        str raw;
+
+        if (!_colIdx)
+        {
+            return '';
+        }
+
+        raw = strLRTrim(this.getCellValue(_worksheet, _rowIdx, _colIdx));
+
+        while (subStr(raw, 1, 1) == "'")
+        {
+            raw = strLRTrim(subStr(raw, 2, strLen(raw) - 1));
+        }
+
+        return raw;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>processDataRow</Name>
+				<Source><![CDATA[
+    private boolean processDataRow(ExcelWorksheet _worksheet, int _rowIdx)
+    {
+        PremPOSSettlementStaging posStaging;
+        PremPOSTerminalMap terminalMap;
+        str recFmtRaw, batchNoRaw, tidRaw, merchantRaw, cardTypeRaw, drCrRaw;
+        str txnDateRaw, settleDateRaw, approvRaw, arnRaw;
+        AmountMST intlAmt, domesticAmt, grossAmt, fileGST, computedGST;
+        TransDate settleDateFromFile;
+        boolean isCharge, isCredit;
+
+        if (provider != PremPOSProvider::PineLabs)
+        {
+            return this.processProviderRow(_worksheet, _rowIdx);
+        }
+
+        recFmtRaw     = strUpr(this.cellAt(_worksheet, _rowIdx, colRecFmt));
+        batchNoRaw    = this.cellAt(_worksheet, _rowIdx, colBatchNo);
+        tidRaw        = this.cellAt(_worksheet, _rowIdx, colTid);
+        merchantRaw   = this.cellAt(_worksheet, _rowIdx, colMerchant);
+        cardTypeRaw   = this.cellAt(_worksheet, _rowIdx, colCardType);
+        drCrRaw       = strUpr(this.cellAt(_worksheet, _rowIdx, colDrCrType));
+        txnDateRaw    = this.cellAt(_worksheet, _rowIdx, colTxnDate);
+        settleDateRaw = this.cellAt(_worksheet, _rowIdx, colSettleDate);
+        approvRaw     = this.cellAt(_worksheet, _rowIdx, colApprovCode);
+        arnRaw        = this.cellAt(_worksheet, _rowIdx, colARN);
+
+        intlAmt     = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colIntlAmt));
+        domesticAmt = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colDomesticAmt));
+
+        // A row with neither a terminal nor any value is trailing whitespace, not data.
+        if (!tidRaw && intlAmt == 0 && domesticAmt == 0)
+        {
+            return false;
+        }
+
+        // REC rows are the acquirer's own charges (terminal rental, service fees) and carry
+        // their value in INTNL AMT; BAT rows are card sales and carry it in DOMESTIC AMT.
+        isCharge = (recFmtRaw == 'REC');
+        isCredit = (drCrRaw == 'CR');
+        grossAmt = domesticAmt != 0 ? domesticAmt : intlAmt;
+
+        posStaging.clear();
+        posStaging.initValue();
+        posStaging.Provider        = PremPOSProvider::PineLabs;
+        posStaging.BatchRunId      = batchRunId;
+        posStaging.BatchNo         = batchNoRaw;
+        posStaging.TerminalId      = tidRaw;
+        posStaging.MerchantId      = merchantRaw;
+        posStaging.RecordFormat    = recFmtRaw;
+        posStaging.CardType        = cardTypeRaw;
+        posStaging.ApprovalCode    = approvRaw;
+        posStaging.ARNNo           = arnRaw;
+        posStaging.TxnDate         = this.parseDate(txnDateRaw);
+        posStaging.ImportFilePath  = sourceFileName;
+
+        // The file's own settle date wins over the dialog value when it is readable.
+        settleDateFromFile = this.parseDate(settleDateRaw);
+        posStaging.SettlementDate = settleDateFromFile ? settleDateFromFile : settlementDate;
+
+        if (isCharge)
+        {
+            posStaging.RecordType    = PremPOSRecordType::Charge;
+            posStaging.GrossAmount   = grossAmt;
+            posStaging.NetSettlement = grossAmt;
+        }
+        else if (isCredit)
+        {
+            posStaging.RecordType    = PremPOSRecordType::Refund;
+            posStaging.GrossAmount   = grossAmt;
+            posStaging.RefundAmount  = grossAmt;
+            posStaging.MSFCharge     = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colMSF));
+            posStaging.NetSettlement = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colNetAmt));
+        }
+        else
+        {
+            posStaging.RecordType    = PremPOSRecordType::Sale;
+            posStaging.GrossAmount   = grossAmt;
+            posStaging.MSFCharge     = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colMSF));
+            posStaging.NetSettlement = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colNetAmt));
+        }
+
+        // GST comes from the file's own CGST/SGST/IGST/UTGST columns. UTGST is the union
+        // territory counterpart of SGST, so it is carried in the same bucket.
+        posStaging.CGSTAmount = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colCGST));
+        posStaging.SGSTAmount = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colSGST))
+                              + this.parseAmount(this.cellAt(_worksheet, _rowIdx, colUTGST));
+        posStaging.IGSTAmount = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colIGST));
+
+        fileGST = posStaging.CGSTAmount + posStaging.SGSTAmount + posStaging.IGSTAmount;
+        posStaging.GSTAmount = fileGST;
+
+        select firstonly terminalMap
+            where terminalMap.TerminalId == posStaging.TerminalId
+               && terminalMap.IsActive   == NoYes::Yes;
+
+        if (terminalMap.RecId)
+        {
+            posStaging.BankAccountId = terminalMap.SettlementBankAccount;
+
+            // A charge row is an expense against the terminal, so its ledger account is
+            // taken from the terminal's own mapping.
+            if (isCharge)
+            {
+                posStaging.LedgerAccount = terminalMap.MSFExpenseAccount;
+            }
+        }
+        else
+        {
+            // Collected, not announced per row: one file can carry forty rows across
+            // twenty terminals, and forty identical warnings bury the one fact that
+            // matters - which terminals are missing.
+            if (!unmappedTerminals.in(posStaging.TerminalId))
+            {
+                unmappedTerminals.add(posStaging.TerminalId);
+            }
+
+            PremBankRecAuditLog::logEvent(
+                0,
+                "POS_TERMINAL_NOT_MAPPED",
+                strFmt("Row %1: terminal %2 is not in POS terminal mapping",
+                    _rowIdx, posStaging.TerminalId));
+        }
+
+        // Intra vs inter state follows the tax the acquirer actually charged; the terminal
+        // master is only consulted when the file reported no GST at all.
+        if (fileGST != 0)
+        {
+            posStaging.IsIntraState = (posStaging.CGSTAmount != 0) ? NoYes::Yes : NoYes::No;
+        }
+        else if (terminalMap.RecId && posStaging.MSFCharge != 0)
+        {
+            posStaging.IsIntraState = terminalMap.IsIntraState;
+            computedGST = posStaging.MSFCharge * (terminalMap.GSTRate / 100.0);
+            posStaging.GSTAmount = computedGST;
+
+            if (terminalMap.IsIntraState == NoYes::Yes)
+            {
+                posStaging.CGSTAmount = computedGST / 2;
+                posStaging.SGSTAmount = computedGST - posStaging.CGSTAmount;
+            }
+            else
+            {
+                posStaging.IGSTAmount = computedGST;
+            }
+
+            PremBankRecAuditLog::logEvent(
+                0,
+                "POS_GST_DERIVED",
+                strFmt("BatchRunId:%1 | TID %2 Batch %3: file reported no GST, derived %4 from terminal rate",
+                    batchRunId, posStaging.TerminalId, posStaging.BatchNo, posStaging.GSTAmount));
+        }
+
+        if (posStaging.validateWrite())
+        {
+            posStaging.insert();
+            return true;
+        }
+
+        return false;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>processMSFCharges</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Build a single consolidated MSF+GST journal for the settlement day,
+    // one block per terminal, posted via the standard D365 journal-post API.
+    // </summary>
+    public LedgerJournalId processMSFCharges()
+    {
+        LedgerJournalTable      journalTable;
+        LedgerJournalName       journalName;
+        PremBankRecParameters   params = PremBankRecParameters::find();
+        PremPOSSettlementStaging  posStg;
+        PremPOSTerminalMap        terminalMap;
+        AmountMST totalMSF, totalCGST, totalSGST, totalIGST, totalBank;
+        AmountMST msfAmount, totalCharge;
+        str       msfVoucher;
+        LedgerJournalId journalId;
+
+        ttsbegin;
+
+        journalName = LedgerJournalName::find(params.MSFJournalName);
+        if (!journalName.RecId)
+        {
+            
+            throw error(strFmt("Journal name %1 not configured.", params.MSFJournalName));
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName  = params.MSFJournalName;
+        journalTable.initFromLedgerJournalName();
+        journalTable.Name         = strFmt("PMPL POS MSF+GST %1", settlementDate);
+        journalTable.insert();
+
+        journalId = journalTable.JournalNum;
+
+        while select sum(MSFCharge), sum(CGSTAmount), sum(SGSTAmount), sum(IGSTAmount) from posStg
+            group by TerminalId
+            where posStg.BatchRunId     == batchRunId
+               && posStg.SettlementDate == settlementDate
+               && posStg.RecordType     == PremPOSRecordType::Sale
+        {
+            select firstonly terminalMap
+                where terminalMap.TerminalId == posStg.TerminalId;
+
+            if (!terminalMap.RecId)
+            {
+                PremBankRecAuditLog::logEvent(
+                    0,
+                    "TERMINAL_NOT_MAPPED",
+                    strFmt("BatchRunId:%1 | Terminal %2 not in PremPOSTerminalMap", batchRunId, posStg.TerminalId));
+                continue;
+            }
+
+            msfAmount = posStg.MSFCharge;
+
+            // PhonePe and MobiKwik files carry no MSF: a terminal with nothing to charge
+            // would only add zero-amount lines, and those block the posting.
+            if (!msfAmount && !posStg.CGSTAmount && !posStg.SGSTAmount && !posStg.IGSTAmount)
+            {
+                continue;
+            }
+
+            // A terminal's MSF, its GST and the offsetting bank credit balance among
+            // themselves, so they form one voucher; the next terminal starts a new one.
+            msfVoucher = PremBankRecHelper::nextJournalVoucher(journalTable);
+
+            this.addJournalLine(journalTable, terminalMap,
+                PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::MSFExpense, params.DefaultBankAccountId), msfAmount, LedgerPostingType::LedgerJournal,
+                strFmt("MSF for TID %1 - %2", posStg.TerminalId, settlementDate),
+                '', msfVoucher);
+            totalMSF += msfAmount;
+
+            if (terminalMap.IsIntraState == NoYes::Yes)
+            {
+                this.addJournalLine(journalTable, terminalMap,
+                    PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::CGSTInput, params.DefaultBankAccountId), posStg.CGSTAmount, LedgerPostingType::LedgerJournal,
+                    strFmt("CGST on MSF - TID %1", posStg.TerminalId),
+                    '', msfVoucher);
+                totalCGST += posStg.CGSTAmount;
+
+                this.addJournalLine(journalTable, terminalMap,
+                    PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::SGSTInput, params.DefaultBankAccountId), posStg.SGSTAmount, LedgerPostingType::LedgerJournal,
+                    strFmt("SGST on MSF - TID %1", posStg.TerminalId),
+                    '', msfVoucher);
+                totalSGST += posStg.SGSTAmount;
+
+                totalCharge = msfAmount + posStg.CGSTAmount + posStg.SGSTAmount;
+            }
+            else
+            {
+                this.addJournalLine(journalTable, terminalMap,
+                    PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::IGSTInput, params.DefaultBankAccountId), posStg.IGSTAmount, LedgerPostingType::LedgerJournal,
+                    strFmt("IGST on MSF - TID %1", posStg.TerminalId),
+                    '', msfVoucher);
+                totalIGST += posStg.IGSTAmount;
+
+                totalCharge = msfAmount + posStg.IGSTAmount;
+            }
+
+            this.addJournalLine(journalTable, terminalMap,
+                0, -totalCharge, LedgerPostingType::Bank,
+                strFmt("Bank A/c for MSF+GST TID %1", posStg.TerminalId),
+                params.DefaultBankAccountId, msfVoucher);
+            totalBank += totalCharge;
+        }
+
+        ttscommit;
+
+        // Nothing matched the batch/settlement-date filter (or every terminal was
+        // unmapped), so the journal has no lines. Posting an empty journal fails with
+        // "No vouchers in the journal can be posted or checked" - drop it and report why.
+        if (!this.journalHasLines(journalTable))
+        {
+            ttsbegin;
+            journalTable.selectForUpdate(true);
+            journalTable.delete();
+            ttscommit;
+
+            PremBankRecAuditLog::logEvent(
+                0,
+                "MSF_JOURNAL_EMPTY",
+                strFmt("No POS settlement lines for %1 - journal %2 discarded | Batch:%3",
+                    settlementDate, journalId, batchRunId));
+
+            return '';
+        }
+
+        try
+        {
+            LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+            PremBankRecAuditLog::logEvent(
+                0,
+                "MSF_JOURNAL_POSTED",
+                strFmt("BatchRunId:%1 | Journal %2 | MSF:%3 CGST:%4 SGST:%5 IGST:%6 Bank:%7",
+                    batchRunId, journalId, totalMSF, totalCGST, totalSGST, totalIGST, totalBank));
+        }
+        catch
+        {
+            PremBankRecAuditLog::logEvent(
+                0,
+                "MSF_JOURNAL_POST_FAILED",
+                strFmt("BatchRunId:%1 | Journal %2 failed posting - check infolog", batchRunId, journalId));
+            throw;
+        }
+
+        return journalId;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>journalHasLines</Name>
+				<Source><![CDATA[
+    private boolean journalHasLines(LedgerJournalTable _journalTable)
+    {
+        LedgerJournalTrans journalTrans;
+
+        select firstonly RecId from journalTrans
+            where journalTrans.JournalNum == _journalTable.JournalNum;
+
+        return journalTrans.RecId != 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>processChargeRows</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Post the acquirer's own charges (REC rows) for the settlement day.
+    // </summary>
+    // <remarks>
+    // These are the small terminal rental / service fees the bank debits one by one -
+    // 10.62, 17.70, 20.06, 21.24, 22.42, 24.78 on a typical day. Finance was raising a
+    // separate manual voucher for each. One journal per day carries a debit line per
+    // terminal against that terminal's MSF expense account, offset to the settlement bank
+    // account, so the statement debits have a counterpart to reconcile against.
+    //
+    // The journal is created but not posted: a human confirms it, exactly as with the
+    // MSF journal.
+    //
+    // A blank batch run id means "every batch imported for that settlement date",
+    // which is what the standalone menu button needs: the user picks a date, not a
+    // batch. MSFPosted still guards against raising the same charges twice.
+    // </remarks>
+    public LedgerJournalId processChargeRows()
+    {
+        PremPOSSettlementStaging  posStg;
+        PremPOSTerminalMap        terminalMap;
+        LedgerJournalTable        journalTable;
+        LedgerJournalName         journalName;
+        PremBankRecParameters     params;
+        AmountMST                 totalCharge;
+        int                       linesAdded;
+        str                       chargeVoucher;
+
+        params      = PremBankRecParameters::find();
+        journalName = LedgerJournalName::find(params.BankJournalName);
+
+        if (!journalName.JournalName)
+        {
+            throw error(strFmt("Journal name %1 is not configured.", params.BankJournalName));
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.JournalType = LedgerJournalType::Daily;
+        journalTable.Name        = strFmt("PMPL POS charges %1", settlementDate);
+        journalTable.insert();
+
+        // Debits per terminal and the single offsetting credit are one balanced entry.
+        chargeVoucher = PremBankRecHelper::nextJournalVoucher(journalTable);
+
+        while select sum(GrossAmount) from posStg
+            group by TerminalId
+            where (posStg.BatchRunId    == batchRunId || !batchRunId)
+               && posStg.SettlementDate == settlementDate
+               && posStg.RecordType     == PremPOSRecordType::Charge
+               && posStg.MSFPosted      == NoYes::No
+        {
+            select firstonly terminalMap
+                where terminalMap.TerminalId == posStg.TerminalId;
+
+            if (!terminalMap.RecId)
+            {
+                PremBankRecAuditLog::logEvent(
+                    0,
+                    "POS_CHARGE_TERMINAL_NOT_MAPPED",
+                    strFmt("BatchRunId:%1 | Terminal %2 has charges of %3 but no PremPOSTerminalMap row",
+                        batchRunId, posStg.TerminalId, posStg.GrossAmount));
+                continue;
+            }
+
+            if (!terminalMap.MSFExpenseAccount)
+            {
+                PremBankRecAuditLog::logEvent(
+                    0,
+                    "POS_CHARGE_NO_LEDGER",
+                    strFmt("BatchRunId:%1 | Terminal %2 has no MSF expense account configured",
+                        batchRunId, posStg.TerminalId));
+                continue;
+            }
+
+            this.addJournalLine(
+                journalTable,
+                terminalMap,
+                terminalMap.MSFExpenseAccount,
+                posStg.GrossAmount,
+                LedgerPostingType::LedgerJournal,
+                strFmt("POS charges TID %1 - %2", posStg.TerminalId, settlementDate),
+                '',
+                chargeVoucher);
+
+            totalCharge += posStg.GrossAmount;
+            linesAdded++;
+        }
+
+        if (!linesAdded)
+        {
+            // Nothing to carry: drop the empty header rather than leave it lying around.
+            journalTable.delete();
+            return '';
+        }
+
+        // Single offsetting credit to the bank, matching the sum of the charge debits.
+        // The terminal's own settlement account is preferred; the parameter default only
+        // covers terminals that have not named one.
+        this.addJournalLine(
+            journalTable,
+            terminalMap,
+            0,
+            -totalCharge,
+            LedgerPostingType::Bank,
+            strFmt("POS charges settlement %1", settlementDate),
+            terminalMap.SettlementBankAccount
+                ? terminalMap.SettlementBankAccount
+                : params.DefaultBankAccountId,
+            chargeVoucher);
+
+        // MSFPosted is stamped as well as the journal number, so a second run of the day
+        // cannot raise the same charges twice.
+        update_recordset posStg
+            setting MSFJournalNum = journalTable.JournalNum,
+                    MSFPosted     = NoYes::Yes
+            where (posStg.BatchRunId    == batchRunId || !batchRunId)
+               && posStg.SettlementDate == settlementDate
+               && posStg.RecordType     == PremPOSRecordType::Charge
+               && posStg.MSFPosted      == NoYes::No;
+
+        PremBankRecAuditLog::logEvent(
+            0,
+            "POS_CHARGE_JOURNAL",
+            strFmt("BatchRunId:%1 | Journal %2 | Lines %3 | Total %4",
+                batchRunId, journalTable.JournalNum, linesAdded, totalCharge));
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>addJournalLine</Name>
+				<Source><![CDATA[
+    // The voucher is passed in, not allocated here: every debit and the offsetting credit
+    // belong to ONE entry, so they must carry the same voucher number. Allocating per line
+    // would split a balanced journal into single-sided vouchers that cannot post.
+    private void addJournalLine(
+        LedgerJournalTable    _journalTable,
+        PremPOSTerminalMap    _terminalMap,
+        LedgerDimensionAccount _ledgerDim,
+        AmountMST             _amount,
+        LedgerPostingType     _postingType,
+        str                   _description,
+        BankAccountID         _bankAccountId = '',
+        str                   _voucher = '')
+    {
+        LedgerJournalTrans journalTrans;
+
+        journalTrans.clear();
+        journalTrans.JournalNum  = _journalTable.JournalNum;
+        journalTrans.Voucher     = _voucher
+            ? _voucher
+            : PremBankRecHelper::nextJournalVoucher(_journalTable);
+        journalTrans.TransDate   = settlementDate;
+        journalTrans.AccountType = _postingType == LedgerPostingType::Bank
+            ? LedgerJournalACType::Bank
+            : LedgerJournalACType::Ledger;
+
+        if (_postingType == LedgerPostingType::Bank)
+        {
+            journalTrans.AccountType = LedgerJournalACType::Bank;
+
+            journalTrans.LedgerDimension =
+        LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+            _bankAccountId,
+            LedgerJournalACType::Bank);
+
+            // The bank's main account sits under an account structure that requires
+            // BRANCH; without the account's own default dimensions the line posts as
+            // "12110133---------" and validation rejects it.
+            journalTrans.DefaultDimension =
+                PremBankRecHelper::bankDefaultDimension(_bankAccountId);
+        }
+        else
+        {
+            journalTrans.AccountType = LedgerJournalACType::Ledger;
+            journalTrans.LedgerDimension = _ledgerDim;
+        }
+        if (_amount >= 0)
+        {
+            journalTrans.AmountCurDebit = _amount;
+        }
+        else
+        {
+            journalTrans.AmountCurCredit = -_amount;
+        }
+
+        journalTrans.CurrencyCode = "INR";
+        journalTrans.Txt          = _description;
+        journalTrans.insert();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>getCellValue</Name>
+				<Source><![CDATA[
+    private str getCellValue(ExcelWorksheet _worksheet, int _rowIdx, int _colIdx)
+    {
+        str cellValue;
+
+        lastRowIdx = _rowIdx;
+
+        // Use .Text, not .Value: EPPlus returns a native System.DateTime from .Value for
+        // date-formatted cells, and any2Str() then renders it in the AOS server's culture -
+        // a string that matches none of the expected dd/MM/yyyy formats. .Text returns
+        // exactly what Excel displays, as a plain string.
+        cellValue = _worksheet.Cells.get_Item(_rowIdx, _colIdx).Text;
+        lastRawCellValue = cellValue;
+
+        return cellValue;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parseDate</Name>
+				<Source><![CDATA[
+    private TransDate parseDate(str _raw)
+    {
+        boolean numeric = true;
+        boolean dotSeen = false;
+        int i, len, ascii;
+        real serial;
+        System.DateTime baseDate, parsed, parsedDt;
+
+        if (!_raw)
+        {
+            return dateNull();
+        }
+
+        len = strLen(_raw);
+        for (i = 1; i <= len; i++)
+        {
+            ascii = char2Num(subStr(_raw, i, 1), 1);
+            if (ascii >= 48 && ascii <= 57)
+            {
+                continue;
+            }
+            else if (ascii == 46 && !dotSeen)
+            {
+                dotSeen = true;
+            }
+            else
+            {
+                numeric = false;
+                break;
+            }
+        }
+
+        if (numeric)
+        {
+            serial = str2Num(_raw);
+            baseDate = new System.DateTime(1900, 1, 1, 0, 0, 0);
+            parsed = baseDate.AddDays(real2int(serial) - 2);
+            return mkDate(parsed.get_Day(), parsed.get_Month(), parsed.get_Year());
+        }
+
+        try
+        {
+            parsedDt = System.DateTime::Parse(_raw,
+                System.Globalization.CultureInfo::get_InvariantCulture());
+            return mkDate(parsedDt.get_Day(), parsedDt.get_Month(), parsedDt.get_Year());
+        }
+        catch
+        {
+            return dateNull();
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parseAmount</Name>
+				<Source><![CDATA[
+    private AmountMST parseAmount(str _raw)
+    {
+        str cleaned;
+
+        if (!_raw)
+        {
+            return 0;
+        }
+        cleaned = strReplace(_raw, ",", "");
+        cleaned = strReplace(cleaned, "Rs", "");
+        cleaned = strLRTrim(cleaned);
+        return str2Num(cleaned);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isCsvFile</Name>
+				<Source><![CDATA[
+    private boolean isCsvFile(str _fileName)
+    {
+        return strEndsWith(strLwr(strLRTrim(_fileName)), '.csv');
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>loadCsv</Name>
+				<Source><![CDATA[
+    // Copies a comma separated file into a new worksheet, one CSV line per row, every value
+    // as text. Values are set as text on purpose: letting Excel type them would turn UTRs
+    // into numbers and dates into serials.
+    private ExcelWorksheet loadCsv(ExcelPackage _package, System.IO.Stream _stream)
+    {
+        ExcelWorksheet          worksheet = _package.get_Workbook().get_Worksheets().Add('POS');
+        System.IO.StreamReader  reader    = new System.IO.StreamReader(_stream, System.Text.Encoding::get_UTF8(), true);
+        container               fields;
+        str                     textLine;
+        int                     rowIdx, colIdx;
+
+        while (!reader.get_EndOfStream())
+        {
+            textLine = reader.ReadLine();
+
+            if (!strLRTrim(textLine))
+            {
+                continue;
+            }
+
+            fields = PremPOSReconciliation::splitCsvLine(textLine);
+            rowIdx++;
+
+            for (colIdx = 1; colIdx <= conLen(fields); colIdx++)
+            {
+                worksheet.Cells.get_Item(rowIdx, colIdx).set_Value(strLRTrim(conPeek(fields, colIdx)));
+            }
+        }
+
+        if (!rowIdx)
+        {
+            throw error(strFmt("POS file '%1' is empty.", sourceFileName));
+        }
+
+        return worksheet;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>splitCsvLine</Name>
+				<Source><![CDATA[
+    // Splits one CSV line; supports quoted values containing commas and doubled quotes.
+    private static container splitCsvLine(str _line)
+    {
+        container fields;
+        str       current, ch;
+        boolean   inQuotes;
+        int       len = strLen(_line);
+        int       pos;
+
+        for (pos = 1; pos <= len; pos++)
+        {
+            ch = subStr(_line, pos, 1);
+
+            if (ch == '"')
+            {
+                if (inQuotes && pos < len && subStr(_line, pos + 1, 1) == '"')
+                {
+                    current += '"';
+                    pos++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+            }
+            else if (ch == ',' && !inQuotes)
+            {
+                fields  += current;
+                current  = '';
+            }
+            else
+            {
+                current += ch;
+            }
+        }
+
+        fields += current;
+
+        return fields;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>readHeaders</Name>
+				<Source><![CDATA[
+    // Header caption (upper case, trimmed) -> column number. The first occurrence wins.
+    private Map readHeaders(ExcelWorksheet _worksheet)
+    {
+        Map headers = new Map(Types::String, Types::Integer);
+        int colIdx, lastCol = _worksheet.Dimension.End.Column;
+        str head;
+
+        for (colIdx = 1; colIdx <= lastCol; colIdx++)
+        {
+            head = strUpr(strLRTrim(_worksheet.Cells.get_Item(HEADER_ROW, colIdx).Text));
+
+            if (head && !headers.exists(head))
+            {
+                headers.insert(head, colIdx);
+            }
+        }
+
+        return headers;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>detectProvider</Name>
+				<Source><![CDATA[
+    // Each acquirer has a column no other one uses. Anything unrecognised is treated as
+    // PineLabs, whose own header check then reports what is missing.
+    private PremPOSProvider detectProvider(Map _headers)
+    {
+        if (_headers.exists('PHONEPE REFERENCE ID'))
+        {
+            return PremPOSProvider::PhonePe;
+        }
+
+        if (_headers.exists('SMID') && _headers.exists('UTR NUMBER'))
+        {
+            return PremPOSProvider::MobiKwik;
+        }
+
+        if (_headers.exists('EXTERNAL MID') && _headers.exists('MSF AMOUNT'))
+        {
+            return PremPOSProvider::PayZapp;
+        }
+
+        return PremPOSProvider::PineLabs;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>headerCol</Name>
+				<Source><![CDATA[
+    private int headerCol(Map _headers, str _caption)
+    {
+        return _headers.exists(_caption) ? _headers.lookup(_caption) : 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>resolveProviderColumns</Name>
+				<Source><![CDATA[
+    // Column positions for the UTR based files. The gross amount goes into colDomesticAmt
+    // and the acquirer's own transaction reference into colTxnRef (stored as ARN number).
+    private void resolveProviderColumns(Map _headers)
+    {
+        switch (provider)
+        {
+            case PremPOSProvider::PhonePe:
+                colMerchant    = this.headerCol(_headers, 'MERCHANT ID');
+                colTid         = this.headerCol(_headers, 'TERMINAL ID');
+                colTxnType     = this.headerCol(_headers, 'TRANSACTION TYPE');
+                colTxnDate     = this.headerCol(_headers, 'TRANSACTION DATE');
+                colStatus      = this.headerCol(_headers, 'TRANSACTION STATUS');
+                colDomesticAmt = this.headerCol(_headers, 'TOTAL TRANSACTION AMOUNT');
+                colUTR         = this.headerCol(_headers, 'TRANSACTION UTR');
+                colTxnRef      = this.headerCol(_headers, 'PHONEPE REFERENCE ID');
+                colCardType    = this.headerCol(_headers, 'INSTRUMENT');
+                break;
+
+            case PremPOSProvider::MobiKwik:
+                colMerchant    = this.headerCol(_headers, 'PARENT MID');
+                colTid         = this.headerCol(_headers, 'SMID');
+                colTxnDate     = this.headerCol(_headers, 'TRANSACTION DATE');
+                colStatus      = this.headerCol(_headers, 'TRANSACTION STATE');
+                colDomesticAmt = this.headerCol(_headers, 'TRANSACTION AMOUNT');
+                colUTR         = this.headerCol(_headers, 'UTR NUMBER');
+                colTxnRef      = this.headerCol(_headers, 'TRANSACTION ID');
+                colPayoutBatch = this.headerCol(_headers, 'PAYOUT BATCH');
+                colPayoutDate  = this.headerCol(_headers, 'PAYOUT DATE');
+                colCardType    = this.headerCol(_headers, 'PAYMENT INSTRUMENT');
+                break;
+
+            case PremPOSProvider::PayZapp:
+                colMerchant    = this.headerCol(_headers, 'EXTERNAL MID');
+                colTid         = this.headerCol(_headers, 'EXTERNAL TID');
+                colTxnType     = this.headerCol(_headers, 'TRANS TYPE');
+                colDrCrType    = this.headerCol(_headers, 'CR / DR');
+                colTxnDate     = this.headerCol(_headers, 'TRANSACTION REQ DATE');
+                colSettleDate  = this.headerCol(_headers, 'SETTLEMENT DATE');
+                colDomesticAmt = this.headerCol(_headers, 'TRANSACTION AMOUNT');
+                colMSF         = this.headerCol(_headers, 'MSF AMOUNT');
+                colCGST        = this.headerCol(_headers, 'CGST AMT');
+                colSGST        = this.headerCol(_headers, 'SGST AMT');
+                colIGST        = this.headerCol(_headers, 'IGST AMT');
+                colUTGST       = this.headerCol(_headers, 'UTGST AMT');
+                colNetAmt      = this.headerCol(_headers, 'NET AMOUNT');
+                colUTR         = this.headerCol(_headers, 'TXN REF NO. (RRN)');
+                colTxnRef      = this.headerCol(_headers, 'UPI TRXN ID');
+                colCardType    = this.headerCol(_headers, 'PAY TYPE');
+                break;
+        }
+
+        if (!colTid || !colDomesticAmt || !colUTR)
+        {
+            throw error(strFmt("POS file '%1' looks like a %2 file, but its terminal, amount or UTR/RRN "
+                + "column is missing from row %3.", sourceFileName, enum2Str(provider), HEADER_ROW));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>processProviderRow</Name>
+				<Source><![CDATA[
+    // <summary>
+    // One PhonePe / MobiKwik / PayZapp row into staging.
+    // </summary>
+    // <remarks>
+    // Settlement date: PayZapp - its Settlement Date column; MobiKwik - Payout Date (rows
+    // still without a payout batch are skipped and come again in the next file); PhonePe -
+    // the file has no payout date, PhonePe pays T+1, so transaction date + 1.
+    // A row whose transaction reference was already imported for the same provider and
+    // terminal is skipped, so overlapping statements can be uploaded safely.
+    // </remarks>
+    private boolean processProviderRow(ExcelWorksheet _worksheet, int _rowIdx)
+    {
+        PremPOSSettlementStaging posStaging, existing;
+        PremPOSTerminalMap       terminalMap;
+        str       tidRaw, statusRaw, txnTypeRaw, drCrRaw, txnRefRaw, payoutBatchRaw;
+        AmountMST grossAmt, fileGST, computedGST;
+        TransDate txnDate, settleDate;
+        boolean   isRefund;
+
+        tidRaw   = this.cellAt(_worksheet, _rowIdx, colTid);
+        grossAmt = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colDomesticAmt));
+
+        // PayZapp's payout summary, PAN and GST lines under the data have neither.
+        if (!tidRaw || !grossAmt)
+        {
+            return false;
+        }
+
+        statusRaw = strUpr(this.cellAt(_worksheet, _rowIdx, colStatus));
+
+        if ((provider == PremPOSProvider::PhonePe  && statusRaw != 'COMPLETED')
+         || (provider == PremPOSProvider::MobiKwik && statusRaw != 'SUCCESS'))
+        {
+            rowsSkipped++;
+            return false;
+        }
+
+        txnDate = this.parseProviderDate(this.cellAt(_worksheet, _rowIdx, colTxnDate));
+
+        switch (provider)
+        {
+            case PremPOSProvider::PhonePe:
+                settleDate = txnDate ? txnDate + 1 : dateNull();
+                break;
+
+            case PremPOSProvider::MobiKwik:
+                payoutBatchRaw = this.cellAt(_worksheet, _rowIdx, colPayoutBatch);
+                settleDate     = this.parseProviderDate(this.cellAt(_worksheet, _rowIdx, colPayoutDate));
+
+                if (!settleDate || !payoutBatchRaw || strUpr(payoutBatchRaw) == 'NA')
+                {
+                    rowsAwaitingPayout++;
+                    return false;
+                }
+
+                payoutBatchRaw = strLRTrim(strReplace(strUpr(payoutBatchRaw), 'BATCH', ''));
+                break;
+
+            case PremPOSProvider::PayZapp:
+                settleDate = this.parseProviderDate(this.cellAt(_worksheet, _rowIdx, colSettleDate));
+                break;
+        }
+
+        txnRefRaw = this.cellAt(_worksheet, _rowIdx, colTxnRef);
+
+        if (txnRefRaw)
+        {
+            select firstonly RecId from existing
+                where existing.Provider   == provider
+                   && existing.TerminalId == tidRaw
+                   && existing.ARNNo      == txnRefRaw;
+
+            if (existing.RecId)
+            {
+                rowsDuplicate++;
+                return false;
+            }
+        }
+
+        txnTypeRaw = strUpr(this.cellAt(_worksheet, _rowIdx, colTxnType));
+        drCrRaw    = strUpr(this.cellAt(_worksheet, _rowIdx, colDrCrType));
+
+        // PhonePe: REVERSAL_TRANSACTION / REFUND. PayZapp: CR / DR = DR or a refund type.
+        isRefund = strScan(txnTypeRaw, 'REVERSAL', 1, strLen(txnTypeRaw))
+                || strScan(txnTypeRaw, 'REFUND', 1, strLen(txnTypeRaw))
+                || drCrRaw == 'DR';
+
+        posStaging.clear();
+        posStaging.initValue();
+        posStaging.Provider       = provider;
+        posStaging.BatchRunId     = batchRunId;
+        posStaging.BatchNo        = payoutBatchRaw;
+        posStaging.TerminalId     = tidRaw;
+        posStaging.MerchantId     = this.cellAt(_worksheet, _rowIdx, colMerchant);
+        posStaging.RecordFormat   = txnTypeRaw;
+        posStaging.CardType       = this.cellAt(_worksheet, _rowIdx, colCardType);
+        posStaging.ARNNo          = txnRefRaw;
+        posStaging.UTRNumber      = this.cellAt(_worksheet, _rowIdx, colUTR);
+        posStaging.TxnDate        = txnDate;
+        posStaging.SettlementDate = settleDate ? settleDate : settlementDate;
+        posStaging.ImportFilePath = sourceFileName;
+        posStaging.GrossAmount    = grossAmt;
+
+        posStaging.CGSTAmount = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colCGST));
+        posStaging.SGSTAmount = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colSGST))
+                              + this.parseAmount(this.cellAt(_worksheet, _rowIdx, colUTGST));
+        posStaging.IGSTAmount = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colIGST));
+        fileGST               = posStaging.CGSTAmount + posStaging.SGSTAmount + posStaging.IGSTAmount;
+        posStaging.GSTAmount  = fileGST;
+
+        if (isRefund)
+        {
+            posStaging.RecordType    = PremPOSRecordType::Refund;
+            posStaging.RefundAmount  = grossAmt;
+            posStaging.NetSettlement = grossAmt;
+        }
+        else
+        {
+            posStaging.RecordType    = PremPOSRecordType::Sale;
+            posStaging.MSFCharge     = this.parseAmount(this.cellAt(_worksheet, _rowIdx, colMSF));
+
+            // PayZapp reports the net it pays; PhonePe and MobiKwik pay the gross (no MSF).
+            posStaging.NetSettlement = colNetAmt
+                ? this.parseAmount(this.cellAt(_worksheet, _rowIdx, colNetAmt))
+                : grossAmt - posStaging.MSFCharge - fileGST;
+        }
+
+        select firstonly terminalMap
+            where terminalMap.TerminalId == posStaging.TerminalId
+               && terminalMap.IsActive   == NoYes::Yes;
+
+        if (terminalMap.RecId)
+        {
+            posStaging.BankAccountId = terminalMap.SettlementBankAccount;
+        }
+        else
+        {
+            if (!unmappedTerminals.in(posStaging.TerminalId))
+            {
+                unmappedTerminals.add(posStaging.TerminalId);
+            }
+
+            PremBankRecAuditLog::logEvent(
+                0,
+                "POS_TERMINAL_NOT_MAPPED",
+                strFmt("Row %1: %2 terminal %3 is not in POS terminal mapping",
+                    _rowIdx, enum2Str(provider), posStaging.TerminalId));
+        }
+
+        // Same rule as PineLabs: the tax actually charged decides intra/inter state; the
+        // terminal rate is only used when MSF came without GST.
+        if (fileGST != 0)
+        {
+            posStaging.IsIntraState = (posStaging.CGSTAmount != 0) ? NoYes::Yes : NoYes::No;
+        }
+        else if (terminalMap.RecId)
+        {
+            posStaging.IsIntraState = terminalMap.IsIntraState;
+
+            if (posStaging.MSFCharge != 0)
+            {
+                computedGST          = posStaging.MSFCharge * (terminalMap.GSTRate / 100.0);
+                posStaging.GSTAmount = computedGST;
+
+                if (terminalMap.IsIntraState == NoYes::Yes)
+                {
+                    posStaging.CGSTAmount = computedGST / 2;
+                    posStaging.SGSTAmount = computedGST - posStaging.CGSTAmount;
+                }
+                else
+                {
+                    posStaging.IGSTAmount = computedGST;
+                }
+
+                posStaging.NetSettlement = grossAmt - posStaging.MSFCharge - computedGST;
+            }
+        }
+
+        if (posStaging.validateWrite())
+        {
+            posStaging.insert();
+            return true;
+        }
+
+        return false;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>parseProviderDate</Name>
+				<Source><![CDATA[
+    // Dates in the UPI files are text in fixed layouts: 2026-10-01 09:45:11.0 (PhonePe,
+    // MobiKwik) and 04-AUG-2026 12:14:20 (PayZapp). Read field by field, independent of
+    // the server culture; anything else falls back to parseDate.
+    private TransDate parseProviderDate(str _raw)
+    {
+        str raw = strLRTrim(_raw);
+        int monthPos;
+
+        if (!raw || strUpr(raw) == 'NA')
+        {
+            return dateNull();
+        }
+
+        // yyyy-MM-dd ...
+        if (strLen(raw) >= 10 && subStr(raw, 5, 1) == '-' && subStr(raw, 8, 1) == '-')
+        {
+            return mkDate(str2Int(subStr(raw, 9, 2)), str2Int(subStr(raw, 6, 2)), str2Int(subStr(raw, 1, 4)));
+        }
+
+        // dd-MMM-yyyy ...
+        if (strLen(raw) >= 11 && subStr(raw, 3, 1) == '-' && subStr(raw, 7, 1) == '-')
+        {
+            monthPos = strScan('JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC', strUpr(subStr(raw, 4, 3)), 1, 36);
+
+            if (monthPos && (monthPos - 1) mod 3 == 0)
+            {
+                return mkDate(str2Int(subStr(raw, 1, 2)), (monthPos + 2) div 3, str2Int(subStr(raw, 8, 4)));
+            }
+        }
+
+        return this.parseDate(raw);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>getRowsImported</Name>
+				<Source><![CDATA[
+    public int getRowsImported() { return rowsImported; }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>getRowsErrored</Name>
+				<Source><![CDATA[
+    public int getRowsErrored()  { return rowsErrored;  }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>construct</Name>
+				<Source><![CDATA[
+    public static PremPOSReconciliation construct(
+        PremBatchRunId _batchRunId,
+        TransDate      _settlementDate)
+    {
+        return new PremPOSReconciliation(_batchRunId, _settlementDate);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Entry point for the POS Import quick action. Prompts for a settlement file via the
+    // standard file-upload dialog; the acquirer format is recognised from its header row.
+    // </summary>
+    public static void main(Args _args)
+    {
+        Dialog dialog;
+        DialogGroup dlgUploadGroup;
+        FormBuildControl formBuildControl;
+        FileUploadBuild fileUploadBuild;
+        FileUpload fileUploadControl;
+        FileUploadTemporaryStorageResult uploadResult;
+        PremPOSReconciliation importer;
+        PremBatchRunId batchRunId;
+
+        dialog = new Dialog("Import POS Settlement (PineLabs / PhonePe / MobiKwik / PayZapp)");
+        dlgUploadGroup = dialog.addGroup("Settlement file (.xlsx / .csv)");
+        formBuildControl = dialog.formBuildDesign().control(dlgUploadGroup.name());
+        fileUploadBuild = formBuildControl.addControlEx(classstr(FileUpload), 'Upload');
+        fileUploadBuild.style(FileUploadStyle::MinimalWithFilename);
+
+        // Without a strategy class the upload never completes: the control stays
+        // busy, OK stays blocked, and the dialog sits there reporting nothing.
+        fileUploadBuild.baseFileUploadStrategyClassName(
+            classStr(FileUploadTemporaryStorageStrategy));
+        fileUploadBuild.fileTypesAccepted('.xlsx,.csv');
+
+        if (!dialog.run() || !dialog.closedOk())
+        {
+            return;
+        }
+
+        fileUploadControl = dialog.formRun().control(dialog.formRun().controlId('Upload'));
+        uploadResult = fileUploadControl.getFileUploadResult();
+
+        if (uploadResult != null && uploadResult.getUploadStatus())
+        {
+            batchRunId = PremBatchRunIdGen::nextId();
+            importer = PremPOSReconciliation::construct(batchRunId, systemDateGet());
+            importer.importFromFileUpload(uploadResult);
+
+            info(strFmt("POS import complete. Imported:%1 Errors:%2",
+                importer.getRowsImported(), importer.getRowsErrored()));
+        }
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>
