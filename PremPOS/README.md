@@ -28,6 +28,7 @@ MobiKwik state ≠ Success, MobiKwik rows without payout batch, rows already imp
 | `AxTable\PremPOSSettlementStaging.xml` | Table | Fields `Provider`, `UTRNumber`; indexes `Idx_ProviderRef`, `Idx_UTR` |
 | `AxClass\PremPOSReconciliation.xml` | Class | Header detection, CSV load, `processProviderRow`, zero-MSF terminals skipped in MSF journal, MSF journal limited to PineLabs rows, dialog accepts .xlsx/.csv |
 | `AxClass\PremBankRecMatchingEngine.xml` | Class | R02: UPI providers get one settlement voucher (`createUPISettlementJournal`, `addUPISettlementLine`); HDFC card settlement (`matchHdfcCardSettlement`, `createCardSettlementJournal`) |
+| `AxClass\PremBankRecHelper.xml` | Class | `upiAcquirerFromNarration`; PhonePe / MobiKwik NEFT credits classified as R02 |
 | `AxTable\PremPOSTerminalMap.xml` | Table | Field `CardSettlementBankAccount` (card clearing bank) + relation to BankAccountTable |
 | `AxForm\PremPOSTerminalMapForm.xml` | Form | `Card clearing bank account` on the Accounting group |
 
@@ -57,6 +58,14 @@ bank is emptied by the gross the sales put into it:
     Settlement bank (PAYZAP...)    Cr  net + MSF + GST
 
 Those rows are stamped MSF posted, and `processMSFCharges` only raises PineLabs rows.
+
+PhonePe / MobiKwik: one NEFT a day for every terminal, e.g.
+`NEFT Cr-YESB0000001-PhonePe Limited-PREM MOTORS PRIVATE LIMITED-YESAP62435046156`. The credit
+is classified R02 by name and matched against all unpaid rows of that acquirer with that
+settlement date (then, if needed, all unpaid rows up to that date):
+
+    Statement bank (HDFC)                  Dr  bank credit
+    Each terminal's settlement bank        Cr  its share of the net
 
 HDFC cards: the SmartHub report has no MSF. The bank credit reads
 `63075144TERMINAL 1 CARDS SETTL. 03/10/26` - terminal number first, sales date last. The

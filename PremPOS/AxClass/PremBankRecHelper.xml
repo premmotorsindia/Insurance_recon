@@ -1,0 +1,1425 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PremBankRecHelper</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+// <summary>
+// Transaction classifier - identifies which of the 13 reconciliation rules applies.
+// Chain-of-responsibility, priority ordered (most specific rule wins).
+// </summary>
+public class PremBankRecHelper
+{
+    private static const str KEYWORD_TERMINAL       = 'TERMINAL';
+    private static const str KEYWORD_CARDS_SETTL    = 'CARDS SETTL';
+    private static const str KEYWORD_PREMMOTORS     = 'PREMMOTORSPRIVATELIMITED';
+    private static const str KEYWORD_INSURANCE      = 'INSURANCE';
+    private static const str KEYWORD_SETTL_CHRG     = 'SETTLEMENT CHARGES';
+    private static const str KEYWORD_MSF            = 'MSF';
+    private static const str KEYWORD_NEFT_RETURN    = 'NEFT RETURN';
+    private static const str KEYWORD_NEFT_RET       = 'NEFT RET';
+    private static const str KEYWORD_CHQ_DEP_RET    = 'CHQ DEP RET';
+    private static const str KEYWORD_ADVICE_NOT     = 'ADVICE NOT RECEIVED';
+    private static const str KEYWORD_CASH_DEPOSIT   = 'CASH DEPOSIT';
+    private static const str KEYWORD_CASH_DEP       = 'CASH DEP';
+    private static const str KEYWORD_CHQ_DEP        = 'CHQ DEP';
+    private static const str KEYWORD_CTS_CLG        = 'CTS CLG';
+    private static const str KEYWORD_CHQ_PAID       = 'CHQ PAID';
+    private static const str KEYWORD_NEFT_CR        = 'NEFT CR';
+    private static const str KEYWORD_RTGS_CR        = 'RTGS CR';
+    private static const str KEYWORD_IMPS           = 'IMPS-';
+    private static const str KEYWORD_NEFT           = 'NEFT';
+    private static const str KEYWORD_RTGS_DR        = 'RTGS DR';
+
+}
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>resolveLabels</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Replace @SYSnnnnn label ids in a message with their readable text.
+    // </summary>
+    // <remarks>
+    // Messages pulled out of the infolog arrive as raw label ids - "@SYS70033 | @SYS27675"
+    // told the reader nothing at all. Each token beginning with @ is resolved so the note
+    // stored against the statement line says what actually went wrong.
+    // </remarks>
+    public static str resolveLabels(str _text)
+    {
+        str result, token;
+        int i, len;
+        boolean inToken;
+
+        if (!_text)
+        {
+            return _text;
+        }
+
+        len = strLen(_text);
+
+        for (i = 1; i <= len + 1; i++)
+        {
+            str ch = i <= len ? subStr(_text, i, 1) : ' ';
+
+            if (ch == '@')
+            {
+                if (inToken && strLen(token) > 1)
+                {
+                    result += SysLabel::labelId2String(token);
+                }
+
+                token   = '@';
+                inToken = true;
+                continue;
+            }
+
+            if (inToken)
+            {
+                // Label ids are letters and digits only; anything else ends the token.
+                int ascii = char2Num(ch, 1);
+
+                if ((ascii >= 65 && ascii <= 90) || (ascii >= 97 && ascii <= 122) || (ascii >= 48 && ascii <= 57))
+                {
+                    token += ch;
+                    continue;
+                }
+
+                result += (strLen(token) > 1 ? SysLabel::labelId2String(token) : token);
+                token   = '';
+                inToken = false;
+            }
+
+            if (i <= len)
+            {
+                result += ch;
+            }
+        }
+
+        return result;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>infologSince</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The infolog messages raised since _startLine, joined into one string.
+    // </summary>
+    // <remarks>
+    // infolog.text() hands back the whole buffer, so a row that failed quietly was
+    // reported with whatever unrelated message happened to be sitting at the end - a POS
+    // import summary, for instance - and the real cause never reached the staging note.
+    // </remarks>
+    public static str infologSince(int _startLine)
+    {
+        container messages;
+        str       result;
+        int       i, lineCount;
+
+        lineCount = infologLine();
+
+        if (lineCount <= _startLine)
+        {
+            return 'No further detail was reported.';
+        }
+
+        messages = infolog.copy(_startLine + 1, lineCount);
+
+        for (i = 1; i <= conLen(messages); i++)
+        {
+            container one  = conPeek(messages, i);
+            str       text = conLen(one) >= 3 ? conPeek(one, 3) : '';
+
+            if (text)
+            {
+                result += (result ? ' | ' : '') + text;
+            }
+        }
+
+        return result ? PremBankRecHelper::resolveLabels(result) : 'No further detail was reported.';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>bankDefaultDimension</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The default financial dimensions configured on a bank account.
+    // </summary>
+    // <remarks>
+    // Journal lines built here set only the ledger account, so the bank side posted as
+    // "12110133---------" with every dimension blank. The PMGC account structure requires
+    // BRANCH on that main account, so posting failed with "You must select a value in the
+    // BRANCH field". The bank account already carries the whole set - BRANCH 34001,
+    // vertical, segment, location - and copying it onto the line satisfies the structure.
+    // </remarks>
+    public static DimensionDefault bankDefaultDimension(BankAccountID _bankAccountId)
+    {
+        BankAccountTable bankAccount;
+
+        if (!_bankAccountId)
+        {
+            return 0;
+        }
+
+        bankAccount = BankAccountTable::find(_bankAccountId);
+
+        return bankAccount.DefaultDimension;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>nextJournalVoucher</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Allocate the next voucher number from a journal's own voucher series.
+    // </summary>
+    // <remarks>
+    // Inserting a LedgerJournalTrans does not fill Voucher in - the caller has to draw it
+    // from the journal name's number sequence. Every journal this solution created was
+    // missing it, so each one failed at posting with "Voucher not specified" and the
+    // resulting error surfaced as an unexplained engine error against the statement line.
+    // </remarks>
+    public static str nextJournalVoucher(LedgerJournalTable _journalTable)
+    {
+        JournalTableData journalTableData;
+
+        if (!_journalTable.JournalNum)
+        {
+            return '';
+        }
+
+        journalTableData = JournalTableData::newTable(_journalTable);
+
+        // JournalTableData has no nextVoucher(); the number comes from the journal's own
+        // voucher-number object. getNew(false) draws and commits the number immediately,
+        // which is what a journal built and posted in one go needs - passing true defers
+        // the decision and hands back a number that is not yet reserved.
+        return journalTableData.journalVoucherNum().getNew(false);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isLoanDisbursement</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True when the narration describes a loan or working-capital drawdown.
+    // </summary>
+    // <remarks>
+    // "WCDL DISBURSED" carries no IFSC and no account number, so the bank-to-bank rule
+    // used to report it as an unmapped IFSC. It is money arriving from a lender, not a
+    // transfer between our own accounts.
+    // </remarks>
+    public static boolean isLoanDisbursement(str _description)
+    {
+        str upper = strUpr(_description);
+
+        if (!_description)
+        {
+            return false;
+        }
+
+        return strScan(upper, 'WCDL', 1, strLen(upper)) > 0
+            || strScan(upper, 'DISBURS', 1, strLen(upper)) > 0
+            || strScan(upper, 'TERM LOAN', 1, strLen(upper)) > 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>ownAccountFromNarration</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Find one of our own bank accounts named by account number inside a narration.
+    // </summary>
+    // <remarks>
+    // An own-account transfer identifies the other side by account number, not by IFSC:
+    // "A2AOWN01 - C46728040826190956 -  - 50200029378770 - PREM MOTORS PRIVATE LIMITED".
+    // Resolving that line through the IFSC map could never work - C46728040826190956 is a
+    // bank reference, not an IFSC - so every A2A line dead-ended in the manual queue.
+    //
+    // Every digit run of nine characters or more is offered to resolveAccountId, which
+    // already knows how to turn a real account number into its AccountID.
+    // </remarks>
+    public static BankAccountID ownAccountFromNarration(str _description, BankAccountID _excludeAccount = '')
+    {
+        str  token, resolved;
+        int  i, len, ascii;
+
+        if (!_description)
+        {
+            return '';
+        }
+
+        len = strLen(_description);
+
+        for (i = 1; i <= len + 1; i++)
+        {
+            ascii = i <= len ? char2Num(subStr(_description, i, 1), 1) : 0;
+
+            if (ascii >= 48 && ascii <= 57)
+            {
+                token += subStr(_description, i, 1);
+                continue;
+            }
+
+            if (strLen(token) >= 9)
+            {
+                resolved = PremBankRecHelper::resolveAccountId(token);
+
+                if (resolved && resolved != _excludeAccount && BankAccountTable::exist(resolved))
+                {
+                    return resolved;
+                }
+            }
+
+            token = '';
+        }
+
+        return '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>resolveAccountId</Name>
+				<Source><![CDATA[
+    /// <summary>
+    /// Accept either a BankAccountTable.AccountID (e.g. HDFCOD3287) or the bank's real
+    /// account number (e.g. 50200029573287) and always return the AccountID - which is
+    /// what PremBankStmtStaging.BankAccountId actually stores.
+    ///
+    /// Several callers default to a raw account NUMBER. Because the BankAccountID EDT is
+    /// only 10 characters wide, '50200029573287' silently truncates to '5020002957',
+    /// which matches neither AccountID nor AccountNum - so queries quietly return nothing
+    /// instead of failing. The final prefix branch recovers those already-truncated values.
+    /// </summary>
+    public static BankAccountID resolveAccountId(str _value)
+    {
+        BankAccountTable bankAccountTable, candidate, matched;
+        str valueDigits;
+        int valueLen, hits;
+
+        if (!_value || BankAccountTable::exist(_value))
+        {
+            return _value;
+        }
+
+        bankAccountTable = BankAccountTable::findOnAccountNum(_value);
+
+        if (bankAccountTable.RecId)
+        {
+            return bankAccountTable.AccountID;
+        }
+
+        valueDigits = strKeep(_value, '0123456789');
+        valueLen    = strLen(valueDigits);
+        hits        = 0;
+
+        if (valueLen >= 8)
+        {
+            while select AccountID, AccountNum from candidate
+            {
+                str candidateDigits = strKeep(candidate.AccountNum, '0123456789');
+
+                if (strLen(candidateDigits) >= valueLen
+                    && subStr(candidateDigits, 1, valueLen) == valueDigits)
+                {
+                    hits++;
+                    matched = candidate;
+                }
+            }
+
+            if (hits == 1)
+            {
+                return matched.AccountID;
+            }
+        }
+
+        return _value;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isSelfTransferNarration</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True only for a genuine transfer between two of our own bank accounts, i.e. when BOTH
+    // the sender and the beneficiary are us.
+    //
+    // HDFC narration layout: "<type>-<IFSC>-<sender>-<beneficiary>-<UTR>[-<ref>]".
+    //
+    // Checking the sender alone is not enough: on every OUTGOING payment we are the sender,
+    // so "RTGS Dr-BARB0GWALIO-PREM MOTORS PRIVATE LIMITED-CBX Internet-..." was being
+    // treated as a self transfer and sent looking for an IFSC mapping instead of a vendor.
+    // Requiring the beneficiary too keeps outgoing payments on R07 and leaves R06 for the
+    // real case, where our name sits in both slots.
+    //
+    // Matching is on a squashed prefix because the bank spells us inconsistently -
+    // "PREM MOTORS PRIVATE LIMITED", "PREM MOTORS PVT LTD", "Prem Motors Pvt Ltd",
+    // "PREM MOTORS PVT LTD VKIA" - and an exact compare misses most of them.
+    // </summary>
+    public static boolean isSelfTransferNarration(str _description)
+    {
+        str sender, beneficiary;
+        int dash1, dash2, dash3, dash4, len;
+
+        if (!_description)
+        {
+            return false;
+        }
+
+        len   = strLen(_description);
+        dash1 = strScan(_description, '-', 1, len);
+        if (!dash1) { return false; }
+
+        dash2 = strScan(_description, '-', dash1 + 1, len);
+        if (!dash2) { return false; }
+
+        dash3 = strScan(_description, '-', dash2 + 1, len);
+        if (!dash3) { return false; }
+
+        sender = subStr(_description, dash2 + 1, dash3 - dash2 - 1);
+
+        // The beneficiary runs to the next dash, or to the end when there is none.
+        dash4 = strScan(_description, '-', dash3 + 1, len);
+        beneficiary = dash4
+            ? subStr(_description, dash3 + 1, dash4 - dash3 - 1)
+            : subStr(_description, dash3 + 1, len - dash3);
+
+        return PremBankRecHelper::isOwnCompany(sender)
+            && PremBankRecHelper::isOwnCompany(beneficiary);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>squash</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Upper-case a string and drop every space, so name spellings that differ only by
+    // spacing compare equal.
+    // </summary>
+    public static str squash(str _value)
+    {
+        return strRem(strUpr(_value), ' ');
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isOwnCompany</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True when this narration slot names our own company, allowing for the bank's many
+    // spellings. Compared as a squashed prefix ('PREMMOTORS...') rather than an exact
+    // string, so "PVT LTD" / "PRIVATE LIMITED" / trailing branch names all match.
+    // </summary>
+    public static boolean isOwnCompany(str _name)
+    {
+        str squashed = PremBankRecHelper::squash(_name);
+        str ownPrefix = 'PREMMOTORS';
+
+        if (strLen(squashed) < strLen(ownPrefix))
+        {
+            return false;
+        }
+
+        return subStr(squashed, 1, strLen(ownPrefix)) == ownPrefix;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>classifyShortDebitFallback</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Original chain's default branch: a debit with a short narration and no dash is a
+    // plain vendor payment, so route it to R07. Keyword rows in PremBankRecRuleSetup
+    // cannot express "length < 50 and contains no dash", hence this stays in code.
+    // </summary>
+    public static PremRecMatchRule classifyShortDebitFallback(
+        str _description,
+        PremCDFlag _cdFlag)
+    {
+        if (_cdFlag == PremCDFlag::Debit
+            && strLen(_description) < 50
+            && !PremBankRecHelper::contains(strUpr(_description), '-'))
+        {
+            return PremRecMatchRule::R07_NEFT_Debit;
+        }
+
+        return PremRecMatchRule::Unclassified;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>classifyTransaction</Name>
+				<Source><![CDATA[
+    public static PremRecMatchRule classifyTransaction(
+        str _description,
+        str _referenceNo,
+        PremCDFlag _cdFlag,
+        BankAccountID _bankAccountId = '',
+        real _amount = 0)
+    {
+        str descUpper = strUpr(_description);
+
+        // PhonePe and MobiKwik pay one NEFT a day for every terminal, and the narration names
+        // the acquirer, not a terminal - "NEFT Cr-YESB0000001-PhonePe Limited-PREM MOTORS
+        // PRIVATE LIMITED-YESAP62435046156". As a plain NEFT credit it would look for a
+        // receipt by UTR and never find one, so it is sent to POS settlement by name.
+        if (_cdFlag == PremCDFlag::Credit
+            && PremBankRecHelper::upiAcquirerFromNarration(_description) != PremPOSProvider::PineLabs)
+        {
+            return PremRecMatchRule::R02_POS_Settlement;
+        }
+
+        // Positional, so it runs ahead of every keyword rule: only the sender slot marks a
+        // real transfer between our own accounts. Keyword rows cannot make this call.
+        if (PremBankRecHelper::isSelfTransferNarration(_description))
+        {
+            // 19-Sep remark: "if FSC or bank account not of Prem Motors then advance from
+            // customer". The sender name alone cannot tell - a dealer account held in our
+            // name at IDFC / IndusInd reads exactly like our own. A credit counts as a self
+            // transfer only when its IFSC is one of ours in the IFSC map; any other IFSC is
+            // an advance. Add an IFSC to the map to turn its lines back into transfers.
+            if (_cdFlag == PremCDFlag::Credit)
+            {
+                str senderIfsc = PremBankRecHelper::extractIFSC(_description);
+
+                if (senderIfsc && !PremBankIFSCMap::findBankByIFSC(senderIfsc))
+                {
+                    return PremRecMatchRule::R14_Customer_Advance;
+                }
+            }
+
+            return PremRecMatchRule::R06_Bank_To_Bank;
+        }
+
+        // Prefer the configurable rules in PremBankRecRuleSetup so adding a bank narration
+        // pattern is data entry, not a code change. The hardcoded chain below is kept as a
+        // fallback for environments where the setup table has not been seeded yet -
+        // without it an empty table would classify every single line as Unclassified.
+        if (PremBankRecRuleSetup::hasAnyActiveRule())
+        {
+            PremRecMatchRule tableResult =
+                PremBankRecRuleSetup::classify(
+                _description, _referenceNo, _cdFlag, _bankAccountId, _amount);
+
+            if (tableResult != PremRecMatchRule::Unclassified)
+            {
+                return tableResult;
+            }
+
+            // The setup table matches on keywords only, so the original chain's last
+            // resort - a short debit narration with no dashes, which HDFC uses for plain
+            // vendor payments - cannot be expressed as a row. Keep it here so those lines
+            // still reach R07 instead of silently landing in the manual queue.
+            return PremBankRecHelper::classifyShortDebitFallback(_description, _cdFlag);
+        }
+
+        if (PremBankRecHelper::containsAll(descUpper,
+                [KEYWORD_TERMINAL, KEYWORD_CARDS_SETTL]))
+        {
+            return PremRecMatchRule::R02_POS_Settlement;
+        }
+
+        // PRIORITY 2 (self transfer) now handled positionally above.
+
+        // PRIORITY 3: NEFT Return (must come before INSURANCE check)
+        if (PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_NEFT_RETURN, KEYWORD_NEFT_RET]))
+        {
+            return PremRecMatchRule::R08_NEFT_Return;
+        }
+
+        // PRIORITY 4: Cheque Return
+        if (PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_CHQ_DEP_RET, KEYWORD_ADVICE_NOT]))
+        {
+            return PremRecMatchRule::R09_Cheque_Return;
+        }
+
+        // PRIORITY 5: Insurance Receipt
+        if (PremBankRecHelper::contains(descUpper, KEYWORD_INSURANCE)
+            && _cdFlag == PremCDFlag::Credit)
+        {
+            return PremRecMatchRule::R10_Insurance_Receipt;
+        }
+
+        // PRIORITY 6: Settlement Charges
+        if (PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_SETTL_CHRG, KEYWORD_MSF]))
+        {
+            return PremRecMatchRule::R13_Bank_Charge;
+        }
+
+        // PRIORITY 7: Cash Deposit
+        if (PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_CASH_DEPOSIT, KEYWORD_CASH_DEP])
+            && _cdFlag == PremCDFlag::Credit)
+        {
+            return PremRecMatchRule::R04_Cash_Deposit;
+        }
+
+        // PRIORITY 8: Cheque Deposit (NOT return)
+        if (PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_CHQ_DEP, KEYWORD_CTS_CLG])
+            && _cdFlag == PremCDFlag::Credit
+            && !PremBankRecHelper::contains(descUpper, KEYWORD_CHQ_DEP_RET))
+        {
+            return PremRecMatchRule::R05_Cheque_Deposit;
+        }
+
+        // PRIORITY 9: Cheque Issued (Debit)
+        if (PremBankRecHelper::contains(descUpper, KEYWORD_CHQ_PAID)
+            && _cdFlag == PremCDFlag::Debit)
+        {
+            return PremRecMatchRule::R03_Cheque_Issued;
+        }
+
+        // PRIORITY 10: NEFT/RTGS/IMPS Credit
+        if (_cdFlag == PremCDFlag::Credit
+            && PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_NEFT_CR, KEYWORD_RTGS_CR, KEYWORD_IMPS]))
+        {
+            return PremRecMatchRule::R01_UTR_Credit;
+        }
+
+        // PRIORITY 11: Outgoing NEFT/RTGS Debit
+        if (_cdFlag == PremCDFlag::Debit
+            && PremBankRecHelper::containsAny(descUpper,
+                [KEYWORD_NEFT, KEYWORD_RTGS_DR]))
+        {
+            return PremRecMatchRule::R07_NEFT_Debit;
+        }
+
+        // DEFAULT: Outgoing Debit (short description = vendor name)
+        if (_cdFlag == PremCDFlag::Debit
+            && strLen(_description) < 50
+            && !PremBankRecHelper::contains(descUpper, '-'))
+        {
+            return PremRecMatchRule::R07_NEFT_Debit;
+        }
+
+        return PremRecMatchRule::Unclassified;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>upiAcquirerFromNarration</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The UPI acquirer a settlement credit names in its narration: PhonePe or MobiKwik.
+    // PineLabs means "none" - PineLabs settlements are recognised by terminal number.
+    // </summary>
+    public static PremPOSProvider upiAcquirerFromNarration(str _description)
+    {
+        str upper = PremBankRecHelper::squash(_description);
+
+        if (PremBankRecHelper::contains(upper, 'PHONEPE'))
+        {
+            return PremPOSProvider::PhonePe;
+        }
+
+        if (PremBankRecHelper::contains(upper, 'MOBIKWIK'))
+        {
+            return PremPOSProvider::MobiKwik;
+        }
+
+        return PremPOSProvider::PineLabs;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>contains</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Check if string contains a substring (case-sensitive).
+    // </summary>
+    public static boolean contains(str _haystack, str _needle)
+    {
+        if (!_haystack || !_needle)
+        {
+            return false;
+        }
+
+        return strScan(_haystack, _needle, 1, strLen(_haystack)) > 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>containsAny</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Check if string contains ANY of the given substrings (OR).
+    // </summary>
+    public static boolean containsAny(str _haystack, container _needles)
+    {
+        int i;
+        for (i = 1; i <= conLen(_needles); i++)
+        {
+            if (PremBankRecHelper::contains(_haystack, conPeek(_needles, i)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>containsAll</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Check if string contains ALL of the given substrings (AND).
+    // </summary>
+    public static boolean containsAll(str _haystack, container _needles)
+    {
+        int i;
+        for (i = 1; i <= conLen(_needles); i++)
+        {
+            if (!PremBankRecHelper::contains(_haystack, conPeek(_needles, i)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractUTR</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract UTR from description or reference no.
+    // </summary>
+    public static PremExtractedUTR extractUTR(str _description, str _referenceNo)
+    {
+        str lastSegment;
+
+        if (_referenceNo && strLen(_referenceNo) >= 10)
+        {
+            return _referenceNo;
+        }
+
+        if (strLen(_description) > 16)
+        {
+            lastSegment = PremBankRecHelper::getLastDashSegment(_description);
+            if (strLen(lastSegment) >= 12 && strLen(lastSegment) <= 22)
+            {
+                return lastSegment;
+            }
+        }
+
+        return '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractLast6</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Last 6 DIGITS of a UTR, used as the reference key when matching against D365.
+    //
+    // Digits only, not the last 6 characters: bank UTRs mix letters and digits
+    // ("YESAP62174085966", "IN22621728112752") and the bank/portal prefix varies between
+    // the statement and whatever was captured on the payment, while the trailing sequence
+    // is stable. Taking characters would drag part of the prefix in and never match.
+    // Returns '' when fewer than 6 digits are present, so callers can skip the fallback
+    // instead of matching on something too short to be meaningful.
+    // </summary>
+    public static str extractLast6(str _utr)
+    {
+        str digits;
+        int len;
+
+        if (!_utr)
+        {
+            return '';
+        }
+
+        digits = strKeep(_utr, '0123456789');
+        len    = strLen(digits);
+
+        if (len < 6)
+        {
+            return '';
+        }
+
+        return subStr(digits, len - 5, 6);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractPOSBatchNo</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract POS batch number from description.
+    // Input: "41959954TERMINAL 1 CARDS SETTL. 10/04/26" -> "41959954"
+    // </summary>
+    public static PremExtractedBatchNo extractPOSBatchNo(str _description)
+    {
+        str batchNo = '';
+        int i;
+        str ch;
+
+        for (i = 1; i <= strLen(_description); i++)
+        {
+            ch = substr(_description, i, 1);
+            if (ch >= '0' && ch <= '9')
+            {
+                batchNo += ch;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return batchNo;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractBranchFromCashDesc</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract branch/outlet name from Cash Deposit description.
+    // Input: "Cash Deposit by - NANURAM - DUDU" -> "DUDU"
+    // </summary>
+    public static PremBranchName extractBranchFromCashDesc(str _description)
+    {
+        return PremBankRecHelper::getLastDashSegment(_description);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>looksLikeIFSC</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True when _value has the shape RBI gives every IFSC: four letters, then the digit
+    // zero, then six letters or digits.
+    // </summary>
+    public static boolean looksLikeIFSC(str _value)
+    {
+        str upper = strUpr(strLRTrim(_value));
+        int i, ascii;
+
+        if (strLen(upper) != 11)
+        {
+            return false;
+        }
+
+        for (i = 1; i <= 4; i++)
+        {
+            ascii = char2Num(subStr(upper, i, 1), 1);
+
+            if (ascii < 65 || ascii > 90)
+            {
+                return false;
+            }
+        }
+
+        if (subStr(upper, 5, 1) != '0')
+        {
+            return false;
+        }
+
+        for (i = 6; i <= 11; i++)
+        {
+            ascii = char2Num(subStr(upper, i, 1), 1);
+
+            if (!((ascii >= 65 && ascii <= 90) || (ascii >= 48 && ascii <= 57)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractIFSC</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract the IFSC code from an RTGS/NEFT narration.
+    // </summary>
+    // <remarks>
+    // Taking whatever sits between the first two dashes is not enough: plenty of
+    // narrations carry a bank reference there instead - "C46728040826190956" was being
+    // stored as an IFSC and then reported as unmapped. The candidate is now checked
+    // against the real IFSC shape (four letters, a zero, six more characters), and if it
+    // fails the whole narration is scanned for a token that does fit.
+    // </remarks>
+    public static PremExtractedIFSC extractIFSC(str _description)
+    {
+        int  firstDash, secondDash, i, len;
+        str  candidate, token;
+
+        if (!_description)
+        {
+            return '';
+        }
+
+        firstDash = strScan(_description, '-', 1, strLen(_description));
+
+        if (firstDash)
+        {
+            secondDash = strScan(_description, '-', firstDash + 1, strLen(_description));
+
+            if (secondDash)
+            {
+                candidate = strLRTrim(subStr(_description, firstDash + 1, secondDash - firstDash - 1));
+
+                if (PremBankRecHelper::looksLikeIFSC(candidate))
+                {
+                    return strUpr(candidate);
+                }
+            }
+        }
+
+        // Fall back to the first token anywhere in the narration that has the IFSC shape.
+        len = strLen(_description);
+
+        for (i = 1; i <= len; i++)
+        {
+            str ch = subStr(_description, i, 1);
+
+            if (ch == '-' || ch == '|' || ch == ' ' || ch == '/')
+            {
+                if (PremBankRecHelper::looksLikeIFSC(token))
+                {
+                    return strUpr(token);
+                }
+
+                token = '';
+            }
+            else
+            {
+                token += ch;
+            }
+        }
+
+        if (PremBankRecHelper::looksLikeIFSC(token))
+        {
+            return strUpr(token);
+        }
+
+        return '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractInsuranceName</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract insurance company name (between 2nd and 3rd dash).
+    // Input: "NEFT Cr-DEUT0784BBY-TATA AIG GENERAL INSURANCE-PREM MOTORS-UTR123"
+    // Output: "TATA AIG GENERAL INSURANCE"
+    // </summary>
+    public static PremInsCoName extractInsuranceName(str _description)
+    {
+        int pos = 1, dashCount = 0, startPos = 0;
+
+        while (pos <= strLen(_description))
+        {
+            if (substr(_description, pos, 1) == '-')
+            {
+                dashCount++;
+                if (dashCount == 2)
+                {
+                    startPos = pos + 1;
+                }
+                if (dashCount == 3 && startPos > 0)
+                {
+                    return strLTrim(strRTrim(substr(_description, startPos, pos - startPos)));
+                }
+            }
+            pos++;
+        }
+
+        return _description;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractBeneficiary</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract beneficiary name from outgoing NEFT description.
+    // </summary>
+    public static PremExtractedBene extractBeneficiary(str _description)
+    {
+        if (strLen(_description) < 30
+            && strScan(_description, '-', 1, strLen(_description)) == 0)
+        {
+            return strLTrim(strRTrim(_description));
+        }
+
+        return PremBankRecHelper::getLastDashSegment(_description);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>getLastDashSegment</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Get the last segment after the final dash separator.
+    // </summary>
+    public static str getLastDashSegment(str _input)
+    {
+        int lastDash = 0;
+        int i;
+
+        if (!_input)
+        {
+            return '';
+        }
+
+        for (i = strLen(_input); i >= 1; i--)
+        {
+            if (substr(_input, i, 1) == '-')
+            {
+                lastDash = i;
+                break;
+            }
+        }
+
+        if (lastDash == 0)
+        {
+            return strLTrim(strRTrim(_input));
+        }
+
+        return strLTrim(strRTrim(substr(_input, lastDash + 1, strLen(_input) - lastDash)));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>stripLeadingZeros</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Drop leading zeros so "025995" and "25995" compare as the same cheque number.
+    // </summary>
+    public static str stripLeadingZeros(str _value)
+    {
+        str trimmed = strLRTrim(_value);
+
+        while (strLen(trimmed) > 1 && subStr(trimmed, 1, 1) == '0')
+        {
+            trimmed = subStr(trimmed, 2, strLen(trimmed) - 1);
+        }
+
+        return trimmed;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>digitsAfterMarker</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Return the first run of digits that appears after _marker in _text, ignoring the
+    // punctuation and spaces between them ("Chq No. 025995" -> "025995").
+    // </summary>
+    public static str digitsAfterMarker(str _text, str _marker)
+    {
+        str  upper = strUpr(_text);
+        str  digits;
+        int  pos, i, len, ascii;
+        boolean started;
+
+        pos = strScan(upper, strUpr(_marker), 1, strLen(upper));
+
+        if (!pos)
+        {
+            return '';
+        }
+
+        i   = pos + strLen(_marker);
+        len = strLen(_text);
+
+        while (i <= len)
+        {
+            ascii = char2Num(subStr(_text, i, 1), 1);
+
+            if (ascii >= 48 && ascii <= 57)
+            {
+                digits += subStr(_text, i, 1);
+                started = true;
+            }
+            else if (started)
+            {
+                // The digit run has ended - anything further belongs to another token.
+                break;
+            }
+            else if (ascii != 32 && ascii != 46 && ascii != 58 && ascii != 45)
+            {
+                // Only spaces, dots, colons and dashes may sit between marker and number.
+                break;
+            }
+
+            i++;
+        }
+
+        return strLen(digits) >= 4 ? digits : '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractPartyCode</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Pull a party account code (VEN000716, CUS000123) out of the narration.
+    // </summary>
+    // <remarks>
+    // The remittance remark we send with a NEFT is echoed back by the bank as one of the
+    // dash-separated segments of the narration, so a payment raised against VEN014219
+    // arrives as "NEFT  - IDIB000O504 - VEN014219 - 50353729256 - TTA PRINT CARE".
+    // Matching on that code is exact, which is what beneficiary-name matching never was.
+    //
+    // The prefix has to be followed immediately by digits: that is what keeps a
+    // beneficiary genuinely called "VENKATESH TRADERS" out of the result.
+    // </remarks>
+    public static str extractPartyCode(str _description, str _prefix)
+    {
+        str  upper   = strUpr(_description);
+        str  prefix  = strUpr(_prefix);
+        int  prefLen = strLen(prefix);
+        int  pos     = 1;
+        int  found;
+        int  i, ascii, digits;
+
+        if (!upper || !prefLen)
+        {
+            return '';
+        }
+
+        while (pos > 0 && pos <= strLen(upper))
+        {
+            found = strScan(upper, prefix, pos, strLen(upper));
+
+            if (found <= 0)
+            {
+                break;
+            }
+
+            // The character before the prefix must not be alphanumeric, otherwise
+            // "...XVEN0001" would read as a code.
+            if (found > 1)
+            {
+                ascii = char2num(upper, found - 1);
+
+                if ((ascii >= 65 && ascii <= 90) || (ascii >= 48 && ascii <= 57))
+                {
+                    pos = found + prefLen;
+                    continue;
+                }
+            }
+
+            // Count the digits that follow the prefix.
+            digits = 0;
+
+            for (i = found + prefLen; i <= strLen(upper); i++)
+            {
+                ascii = char2num(upper, i);
+
+                if (ascii >= 48 && ascii <= 57)
+                {
+                    digits++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            // A real code is 3 to 10 digits. Fewer is a coincidence, more is an
+            // account number that happens to sit next to the word.
+            if (digits >= 3 && digits <= 10)
+            {
+                return subStr(upper, found, prefLen + digits);
+            }
+
+            pos = found + prefLen;
+        }
+
+        return '';
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractVendorCode</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The vendor account code carried in the narration, if any.
+    // </summary>
+    public static str extractVendorCode(str _description, str _prefix = 'VEN')
+    {
+        return _prefix
+             ? PremBankRecHelper::extractPartyCode(_description, _prefix)
+             : '';
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractRemittanceRemark</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The remittance remark the bank echoed back: the third field of an outgoing
+    // NEFT / RTGS / IMPS narration.
+    // </summary>
+    // <remarks>
+    // The narration is five fields separated by " - ":
+    //
+    //     NEFT  - BARB0KATSOO - NEXAJSAL-2670697206 - 17880100002019 - SURESH SHARDA ...
+    //
+    // The separator is space-dash-space, and the scan has to be for that exact string.
+    // str2con treats its delimiter as a SET OF CHARACTERS, so " - " would split on the
+    // space and on the dash independently and cut the customer reference in half -
+    // "NEXAJSAL-2670697206" uses a bare dash of its own.
+    // </remarks>
+    public static str extractRemittanceRemark(str _description)
+    {
+        str sep = ' - ';
+        int sepLen = 3;
+        int len;
+        int p1, p2, p3, p4;
+        str head;
+
+        if (!_description)
+        {
+            return '';
+        }
+
+        head = strUpr(strLRTrim(_description));
+
+        if (strScan(head, 'NEFT', 1, 5) != 1
+         && strScan(head, 'RTGS', 1, 5) != 1
+         && strScan(head, 'IMPS', 1, 5) != 1)
+        {
+            return '';
+        }
+
+        len = strLen(_description);
+
+        p1 = strScan(_description, sep, 1, len);
+
+        if (p1 <= 0)
+        {
+            return '';
+        }
+
+        p2 = strScan(_description, sep, p1 + sepLen, len);
+
+        if (p2 <= 0)
+        {
+            return '';
+        }
+
+        p3 = strScan(_description, sep, p2 + sepLen, len);
+
+        if (p3 <= 0)
+        {
+            return '';
+        }
+
+        // The fifth field (the beneficiary) must be there too, otherwise this is some
+        // other narration shape and the third field is not a remark.
+        p4 = strScan(_description, sep, p3 + sepLen, len);
+
+        if (p4 <= 0)
+        {
+            return '';
+        }
+
+        return strLRTrim(subStr(_description, p2 + sepLen, p3 - (p2 + sepLen)));
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isStructuredReference</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Is this remark a reference we can look up, rather than just the payee's name?
+    // </summary>
+    // <remarks>
+    // 965 of the 972 outgoing narrations in the sample carry the beneficiary's name in
+    // the remark slot - "SATURN OVERSEAS", "MOOL CHAND", "S.R. ENTERPRISES". A real
+    // reference has no space in it and carries a run of digits, which is what
+    // "NEXAJSAL-2670697206" and "VEN014219" both have and none of the names do.
+    // </remarks>
+    public static boolean isStructuredReference(str _remark)
+    {
+        str trimmed = strLRTrim(_remark);
+
+        if (!trimmed || strScan(trimmed, ' ', 1, strLen(trimmed)) > 0)
+        {
+            return false;
+        }
+
+        return strLen(PremBankRecHelper::longestDigitRun(trimmed)) >= 4;
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>longestDigitRun</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The longest unbroken run of digits in a string - "NEXAJSAL-2670697206" gives
+    // "2670697206", which is the part a voucher or a receipt is keyed under.
+    // </summary>
+    public static str longestDigitRun(str _value)
+    {
+        str best, current;
+        int i, ascii;
+
+        for (i = 1; i <= strLen(_value); i++)
+        {
+            ascii = char2num(_value, i);
+
+            if (ascii >= 48 && ascii <= 57)
+            {
+                current += subStr(_value, i, 1);
+
+                if (strLen(current) > strLen(best))
+                {
+                    best = current;
+                }
+            }
+            else
+            {
+                current = '';
+            }
+        }
+
+        return best;
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>extractChequeNo</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Extract a cheque number from a statement narration or reference column.
+    // </summary>
+    // <remarks>
+    // D365 keeps the cheque number inside the payment narration - "Being Chq No. 025995
+    // Dated - 29/06/2026" - and leaves the Cheque number column at 0, so the digits that
+    // follow a "CHQ NO"/"CHEQUE NO" marker are the reliable source. Falling straight back
+    // to the last six digits of the whole narration used to pick up the account number or
+    // the date instead.
+    // </remarks>
+    public static PremExtractedCheque extractChequeNo(str _description, str _referenceNo)
+    {
+        str marked;
+
+        if (_referenceNo)
+        {
+            return _referenceNo;
+        }
+
+        marked = PremBankRecHelper::digitsAfterMarker(_description, 'CHQ NO');
+
+        if (!marked)
+        {
+            marked = PremBankRecHelper::digitsAfterMarker(_description, 'CHEQUE NO');
+        }
+
+        if (!marked)
+        {
+            marked = PremBankRecHelper::digitsAfterMarker(_description, 'CHQ');
+        }
+
+        if (marked)
+        {
+            return marked;
+        }
+
+        return PremBankRecHelper::extractLast6(_description);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>getMappingType</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Determine mapping type based on rule.
+    // </summary>
+    public static PremMappingType getMappingType(PremRecMatchRule _rule)
+    {
+        switch (_rule)
+        {
+            case PremRecMatchRule::R02_POS_Settlement:
+                return PremMappingType::POSTOBANKMAPPING;
+            case PremRecMatchRule::R12_POS_MSF_GS:
+                return PremMappingType::POSTOVENMAPPING;
+            case PremRecMatchRule::R10_Insurance_Receipt:
+                return PremMappingType::BANKTOINSMAPPING;
+            case PremRecMatchRule::R06_Bank_To_Bank:
+                return PremMappingType::BANKTOBANKMAPPING;
+            case PremRecMatchRule::R13_Bank_Charge:
+                return PremMappingType::BANKTOSTLMNTVENDMAPPING;
+            default:
+                return PremMappingType::None;
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>requiresVendCustMatch</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Check if rule requires a customer/vendor match.
+    // </summary>
+    public static boolean requiresVendCustMatch(PremRecMatchRule _rule)
+    {
+        return _rule == PremRecMatchRule::R03_Cheque_Issued
+            || _rule == PremRecMatchRule::R05_Cheque_Deposit
+            || _rule == PremRecMatchRule::R07_NEFT_Debit
+            || _rule == PremRecMatchRule::R10_Insurance_Receipt;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>getRuleDisplayName</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Get human-readable rule name for UI.
+    // </summary>
+    public static str getRuleDisplayName(PremRecMatchRule _rule)
+    {
+        return enum2Str(_rule);
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>

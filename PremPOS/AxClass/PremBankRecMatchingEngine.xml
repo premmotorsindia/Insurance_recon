@@ -931,6 +931,12 @@ public class PremBankRecMatchingEngine
         boolean                 upiSettlement;
         boolean                 fromMerchantCode;
 
+        // PhonePe / MobiKwik: one NEFT for every terminal, named by acquirer.
+        if (this.matchAcquirerSettlement(_staging))
+        {
+            return;
+        }
+
         // A UPI settlement names the MERCHANT, not the terminal: "UPI SETTLEMENT -SE2226-
         // 05/08/26". The terminal map knows which terminal that merchant belongs to, so
         // the merchant code is translated before giving up.
@@ -2543,6 +2549,199 @@ public class PremBankRecMatchingEngine
         }
 
         journalTrans.insert();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchAcquirerSettlement</Name>
+				<Source><![CDATA[
+    // <summary>
+    // PhonePe / MobiKwik settlement: one NEFT a day for all terminals of the acquirer.
+    //
+    //     Statement bank (HDFC)                  Dr  bank credit
+    //     Each terminal's settlement bank        Cr  its share of the day's net
+    // </summary>
+    // <remarks>
+    // The rows of the credit date are tried first (PhonePe pays T+1 and the import dates
+    // the rows that way; MobiKwik rows carry their payout date). When those do not add up,
+    // every unpaid row up to that date is tried, so days paid together still match.
+    // These files carry no MSF, so the day's net is the gross.
+    // </remarks>
+    // <returns>false when the narration names no UPI acquirer; true when handled.</returns>
+    private boolean matchAcquirerSettlement(PremBankStmtStaging _staging)
+    {
+        PremPOSSettlementStaging    pos, posUpdate;
+        PremBankRecParameters       params    = PremBankRecParameters::find();
+        PremPOSProvider             acquirer  = PremBankRecHelper::upiAcquirerFromNarration(_staging.PremDescription);
+        TransDate                   txnDate   = DateTimeUtil::date(_staging.TxnDateTime);
+        AmountCur                   tolerance = params.AmountTolerance ? params.AmountTolerance : 1.00;
+        AmountMST                   dayTotal, cumulativeTotal;
+        boolean                     cumulative;
+        LedgerJournalId             journalNum;
+
+        if (acquirer == PremPOSProvider::PineLabs || _staging.CreditDebitFlag != PremCDFlag::Credit)
+        {
+            return false;
+        }
+
+        select sum(NetSettlement) from pos
+            where pos.Provider       == acquirer
+               && pos.SettlementDate == txnDate
+               && pos.RecordType     == PremPOSRecordType::Sale
+               && pos.Reconciled     == NoYes::No;
+
+        dayTotal = pos.NetSettlement;
+
+        if (!dayTotal || abs(dayTotal - _staging.Amount) > tolerance)
+        {
+            select sum(NetSettlement) from pos
+                where pos.Provider       == acquirer
+                   && pos.SettlementDate <= txnDate
+                   && pos.RecordType     == PremPOSRecordType::Sale
+                   && pos.Reconciled     == NoYes::No;
+
+            cumulativeTotal = pos.NetSettlement;
+
+            if (!cumulativeTotal || abs(cumulativeTotal - _staging.Amount) > tolerance)
+            {
+                _staging.markManual(strFmt(
+                    "%1 settlement of %2: unpaid %1 rows for %3 total %4 (all unpaid up to that date %5). "
+                    + "Import the %1 statement for that day, or check for missing / extra rows.",
+                    acquirer, _staging.Amount, txnDate, dayTotal, cumulativeTotal));
+                this.manualQueued++;
+                return true;
+            }
+
+            cumulative = true;
+        }
+
+        // Every terminal must be mapped, otherwise its share has no account to credit.
+        select firstonly TerminalId from pos
+            where pos.Provider      == acquirer
+               && pos.RecordType    == PremPOSRecordType::Sale
+               && pos.Reconciled    == NoYes::No
+               && pos.BankAccountId == ''
+               && ((!cumulative && pos.SettlementDate == txnDate)
+                || (cumulative  && pos.SettlementDate <= txnDate));
+
+        if (pos.TerminalId)
+        {
+            _staging.markManual(strFmt(
+                "%1 terminal %2 has no settlement bank account in POS terminal mapping. Map it, "
+                + "re-import the %1 statement, then reclassify this line.", acquirer, pos.TerminalId));
+            this.manualQueued++;
+            return true;
+        }
+
+        journalNum = this.createAcquirerSettlementJournal(_staging, acquirer, txnDate, cumulative,
+            strFmt("%1 settlement - %2", acquirer, txnDate));
+
+        if (!journalNum)
+        {
+            _staging.markManual(strFmt("%1 settlement: journal could not be created", acquirer));
+            this.manualQueued++;
+            return true;
+        }
+
+        update_recordset posUpdate
+            setting Reconciled           = NoYes::Yes,
+                    ReconciledStagingId  = _staging.RecId,
+                    SettlementJournalNum = journalNum,
+                    MSFPosted            = NoYes::Yes,
+                    MSFJournalNum        = journalNum
+            where posUpdate.Provider   == acquirer
+               && posUpdate.RecordType == PremPOSRecordType::Sale
+               && posUpdate.Reconciled == NoYes::No
+               && ((!cumulative && posUpdate.SettlementDate == txnDate)
+                || (cumulative  && posUpdate.SettlementDate <= txnDate));
+
+        _staging.MatchedRefId      = enum2Str(acquirer);
+        _staging.MatchedJournalNum = journalNum;
+        _staging.MappingType       = PremMappingType::POSTOBANKMAPPING;
+        _staging.markReconciled(0, strFmt("%1 settlement matched: %2 totalling %3",
+            acquirer, txnDate, cumulative ? cumulativeTotal : dayTotal));
+        this.autoPosted++;
+
+        return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createAcquirerSettlementJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Bank Dr for the credit, and one Cr per settlement bank of the acquirer's terminals.
+    // A paisa of rounding between the bank and the file goes to the last credit line, so
+    // the voucher always balances.
+    // </summary>
+    private LedgerJournalId createAcquirerSettlementJournal(
+        PremBankStmtStaging _staging,
+        PremPOSProvider     _acquirer,
+        TransDate           _settlementDate,
+        boolean             _cumulative,
+        str                 _narration)
+    {
+        PremPOSSettlementStaging    pos;
+        PremBankRecParameters       params = PremBankRecParameters::find();
+        LedgerJournalTable          journalTable;
+        Voucher                     voucher;
+        container                   credits;
+        BankAccountID               clearingBank;
+        AmountMST                   credited, share;
+        int                         i;
+
+        if (!params.BankJournalName)
+        {
+            error("No Bank journal name configured in Bank Reconciliation Parameters.");
+            return '';
+        }
+
+        while select sum(NetSettlement) from pos
+            group by BankAccountId
+            where pos.Provider   == _acquirer
+               && pos.RecordType == PremPOSRecordType::Sale
+               && pos.Reconciled == NoYes::No
+               && ((!_cumulative && pos.SettlementDate == _settlementDate)
+                || (_cumulative  && pos.SettlementDate <= _settlementDate))
+        {
+            credits += [[pos.BankAccountId, pos.NetSettlement]];
+        }
+
+        if (!conLen(credits))
+        {
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.insert();
+
+        voucher = PremBankRecHelper::nextJournalVoucher(journalTable);
+
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
+            _staging.BankAccountId, 0, _staging.Amount, _narration);
+
+        for (i = 1; i <= conLen(credits); i++)
+        {
+            [clearingBank, share] = conPeek(credits, i);
+
+            if (i == conLen(credits))
+            {
+                share = _staging.Amount - credited;
+            }
+
+            credited += share;
+
+            this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
+                clearingBank, 0, -share, _narration);
+        }
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
     }
 
 ]]></Source>
