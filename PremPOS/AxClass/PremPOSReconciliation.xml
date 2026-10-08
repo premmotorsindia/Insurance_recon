@@ -1084,7 +1084,7 @@ public class PremPOSReconciliation
 
             for (colIdx = 1; colIdx <= conLen(fields); colIdx++)
             {
-                worksheet.Cells.get_Item(rowIdx, colIdx).set_Value(strLRTrim(conPeek(fields, colIdx)));
+                worksheet.get_Cells().get_Item(rowIdx, colIdx).set_Value(strLRTrim(conPeek(fields, colIdx)));
             }
         }
 
