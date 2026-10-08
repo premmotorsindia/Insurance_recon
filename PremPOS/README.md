@@ -28,6 +28,7 @@ MobiKwik state ≠ Success, MobiKwik rows without payout batch, rows already imp
 | `AxTable\PremPOSSettlementStaging.xml` | Table | Fields `Provider`, `UTRNumber`; indexes `Idx_ProviderRef`, `Idx_UTR` |
 | `AxClass\PremPOSReconciliation.xml` | Class | Header detection, CSV load, `processProviderRow`, zero-MSF terminals skipped in MSF journal, MSF journal limited to PineLabs rows, dialog accepts .xlsx/.csv |
 | `AxClass\PremBankRecMatchingEngine.xml` | Class | R02: UPI providers get one settlement voucher (`createUPISettlementJournal`, `addUPISettlementLine`); HDFC card settlement (`matchHdfcCardSettlement`, `createCardSettlementJournal`) |
+| (fix) `runPOSReconciliation` / `processMSFCharges` | | "Include POS reconciliation" now raises one PineLabs MSF+GST journal per unposted settlement date in the run's range, and stamps the rows MSF posted |
 | `AxClass\PremBankRecHelper.xml` | Class | `upiAcquirerFromNarration`; PhonePe / MobiKwik NEFT credits classified as R02 |
 | `AxTable\PremPOSTerminalMap.xml` | Table | Field `CardSettlementBankAccount` (card clearing bank) + relation to BankAccountTable |
 | `AxForm\PremPOSTerminalMapForm.xml` | Form | `Card clearing bank account` on the Accounting group |

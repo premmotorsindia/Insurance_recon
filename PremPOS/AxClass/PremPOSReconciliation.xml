@@ -607,6 +607,10 @@ public class PremPOSReconciliation
         AmountMST msfAmount, totalCharge;
         str       msfVoucher;
         LedgerJournalId journalId;
+        PremPOSSettlementStaging  posStamp;
+        Set                       postedTerminals = new Set(Types::String);
+        SetEnumerator             terminalEnum;
+        PremTerminalId            postedTerminal;
 
         ttsbegin;
 
@@ -628,12 +632,15 @@ public class PremPOSReconciliation
 
         // PhonePe / MobiKwik / PayZapp charges are posted inside their settlement voucher
         // by the bank rec engine (R02), so only PineLabs rows are raised here.
+        // A blank batch run id takes every batch of the settlement date - the bank rec engine
+        // works by date, not by import. MSFPosted keeps a second run from charging twice.
         while select sum(MSFCharge), sum(CGSTAmount), sum(SGSTAmount), sum(IGSTAmount) from posStg
             group by TerminalId
-            where posStg.BatchRunId     == batchRunId
+            where (posStg.BatchRunId    == batchRunId || !batchRunId)
                && posStg.SettlementDate == settlementDate
                && posStg.RecordType     == PremPOSRecordType::Sale
                && posStg.Provider       == PremPOSProvider::PineLabs
+               && posStg.MSFPosted      == NoYes::No
         {
             select firstonly terminalMap
                 where terminalMap.TerminalId == posStg.TerminalId;
@@ -698,6 +705,8 @@ public class PremPOSReconciliation
                 strFmt("Bank A/c for MSF+GST TID %1", posStg.TerminalId),
                 params.DefaultBankAccountId, msfVoucher);
             totalBank += totalCharge;
+
+            postedTerminals.add(posStg.TerminalId);
         }
 
         ttscommit;
@@ -724,6 +733,27 @@ public class PremPOSReconciliation
         try
         {
             LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+            // Only the terminals that got lines: an unmapped terminal stays unposted so it is
+            // picked up once it is mapped.
+            ttsbegin;
+            terminalEnum = postedTerminals.getEnumerator();
+
+            while (terminalEnum.moveNext())
+            {
+                postedTerminal = terminalEnum.current();
+
+                update_recordset posStamp
+                    setting MSFPosted     = NoYes::Yes,
+                            MSFJournalNum = journalId
+                    where posStamp.TerminalId     == postedTerminal
+                       && (posStamp.BatchRunId    == batchRunId || !batchRunId)
+                       && posStamp.SettlementDate == settlementDate
+                       && posStamp.RecordType     == PremPOSRecordType::Sale
+                       && posStamp.Provider       == PremPOSProvider::PineLabs
+                       && posStamp.MSFPosted      == NoYes::No;
+            }
+            ttscommit;
 
             PremBankRecAuditLog::logEvent(
                 0,

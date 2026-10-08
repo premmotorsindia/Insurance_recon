@@ -2288,13 +2288,38 @@ public class PremBankRecMatchingEngine
 				<Name>runPOSReconciliation</Name>
 				<Source><![CDATA[
     // <summary>
-    // Run POS-specific reconciliation (consolidated MSF+GST journal, R-12).
+    // Run POS-specific reconciliation (consolidated MSF+GST journal, R-12): one journal per
+    // settlement date that still has unposted PineLabs MSF, within the run's date range.
     // </summary>
+    // <remarks>
+    // This used to pass the bank account as the batch run id and today as the settlement
+    // date, so processMSFCharges never found a row and the toggle did nothing.
+    // </remarks>
     private void runPOSReconciliation()
     {
-        PremPOSReconciliation posRec;
-        posRec = PremPOSReconciliation::construct(this.bankAccountId, this.processDate);
-        posRec.processMSFCharges();
+        PremPOSSettlementStaging pos;
+        TransDate                upTo = this.toDate ? this.toDate : this.processDate;
+        LedgerJournalId          journalId;
+        int                      journals;
+
+        while select SettlementDate from pos
+            group by SettlementDate
+            where pos.Provider       == PremPOSProvider::PineLabs
+               && pos.RecordType     == PremPOSRecordType::Sale
+               && pos.MSFPosted      == NoYes::No
+               && pos.MSFCharge      != 0
+               && pos.SettlementDate >= this.fromDate
+               && pos.SettlementDate <= upTo
+        {
+            journalId = PremPOSReconciliation::construct('', pos.SettlementDate).processMSFCharges();
+
+            if (journalId)
+            {
+                journals++;
+            }
+        }
+
+        info(strFmt("POS MSF+GST: %1 journal(s) posted.", journals));
     }
 
 ]]></Source>
