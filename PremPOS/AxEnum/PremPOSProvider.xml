@@ -24,6 +24,11 @@
 			<Label>PayZapp</Label>
 			<Value>3</Value>
 		</AxEnumValue>
+		<AxEnumValue>
+			<Name>HdfcCards</Name>
+			<Label>HDFC cards</Label>
+			<Value>4</Value>
+		</AxEnumValue>
 	</EnumValues>
 	<IsExtensible>true</IsExtensible>
 </AxEnum>

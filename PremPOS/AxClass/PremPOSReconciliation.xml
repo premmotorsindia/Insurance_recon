@@ -12,7 +12,8 @@ using OfficeOpenXml.ExcelRange;
 // Imports a POS settlement file into PremPOSSettlementStaging and builds the
 // consolidated MSF+GST journal for the day (Rule R-12).
 // The acquirer is recognised from the header row: PineLabs (.xlsx), PhonePe (.csv),
-// MobiKwik (.xlsx) and PayZapp (.xlsx). All four land in the same staging table, so
+// MobiKwik (.xlsx), PayZapp (.xlsx) and the HDFC SmartHub transaction report (.xlsx,
+// card rows only). All of them land in the same staging table, so
 // terminal mapping, MSF journal and bank matching work the same way for each.
 // Uses EPPlus (OfficeOpenXml) - the PU66-supported Excel library in this environment.
 // POS XLSX format: row 1 = headers, row 2+ = data.
@@ -42,7 +43,8 @@ public class PremPOSReconciliation
 
     // UPI acquirers (PhonePe, MobiKwik, PayZapp). PineLabs keeps the columns above.
     private PremPOSProvider     provider;
-    private int colStatus, colUTR, colTxnRef, colTxnType, colPayoutBatch, colPayoutDate;
+    private int colStatus, colUTR, colTxnRef, colTxnType, colPayoutBatch, colPayoutDate, colPaymentType;
+    private int                 rowsNotCards;       // HDFC report rows that are BharatQR / UPI, not cards
     private int                 rowsSkipped;        // status not successful
     private int                 rowsAwaitingPayout; // MobiKwik rows not yet paid out
     private int                 rowsDuplicate;      // already imported from an earlier file
@@ -185,6 +187,12 @@ public class PremPOSReconciliation
         if (rowsDuplicate)
         {
             info(strFmt("%1 row(s) were already imported from an earlier file and were skipped.", rowsDuplicate));
+        }
+
+        if (rowsNotCards)
+        {
+            info(strFmt("%1 BharatQR / UPI row(s) of the HDFC report were skipped - they settle through "
+                + "the PayZapp payout report. Only card sales are taken from this file.", rowsNotCards));
         }
 
         if (rowsSkipped)
@@ -1194,6 +1202,11 @@ public class PremPOSReconciliation
             return PremPOSProvider::PayZapp;
         }
 
+        if (_headers.exists('MINTOAK TRANSACTION ID') && _headers.exists('PAYMENT TYPE'))
+        {
+            return PremPOSProvider::HdfcCards;
+        }
+
         return PremPOSProvider::PineLabs;
     }
 
@@ -1261,6 +1274,21 @@ public class PremPOSReconciliation
                 colTxnRef      = this.headerCol(_headers, 'UPI TRXN ID');
                 colCardType    = this.headerCol(_headers, 'PAY TYPE');
                 break;
+
+            // HDFC SmartHub transaction report. It carries no MSF and no settlement date:
+            // HDFC pays the card gross less MSF, and the bank rec engine books the difference.
+            case PremPOSProvider::HdfcCards:
+                colMerchant    = this.headerCol(_headers, 'MERCHANT ID');
+                colTid         = this.headerCol(_headers, 'TERMINAL ID');
+                colTxnType     = this.headerCol(_headers, 'TRANSACTION TYPE');
+                colPaymentType = this.headerCol(_headers, 'PAYMENT TYPE');
+                colTxnDate     = this.headerCol(_headers, 'TRANSACTION DATE');
+                colStatus      = this.headerCol(_headers, 'TRANSACTION STATE');
+                colDomesticAmt = this.headerCol(_headers, 'AMOUNT(RS.)');
+                colUTR         = this.headerCol(_headers, 'RRN NO');
+                colTxnRef      = this.headerCol(_headers, 'MINTOAK TRANSACTION ID');
+                colCardType    = this.headerCol(_headers, 'PAYMENT NETWORK');
+                break;
         }
 
         if (!colTid || !colDomesticAmt || !colUTR)
@@ -1303,10 +1331,19 @@ public class PremPOSReconciliation
             return false;
         }
 
+        // The HDFC report also lists BharatQR and UPI; those settle through PayZapp.
+        if (provider == PremPOSProvider::HdfcCards
+         && strUpr(this.cellAt(_worksheet, _rowIdx, colPaymentType)) != 'CARDS')
+        {
+            rowsNotCards++;
+            return false;
+        }
+
         statusRaw = strUpr(this.cellAt(_worksheet, _rowIdx, colStatus));
 
-        if ((provider == PremPOSProvider::PhonePe  && statusRaw != 'COMPLETED')
-         || (provider == PremPOSProvider::MobiKwik && statusRaw != 'SUCCESS'))
+        if ((provider == PremPOSProvider::PhonePe   && statusRaw != 'COMPLETED')
+         || (provider == PremPOSProvider::MobiKwik  && statusRaw != 'SUCCESS')
+         || (provider == PremPOSProvider::HdfcCards && statusRaw != 'SALESUCCESS'))
         {
             rowsSkipped++;
             return false;
@@ -1317,6 +1354,9 @@ public class PremPOSReconciliation
         switch (provider)
         {
             case PremPOSProvider::PhonePe:
+            case PremPOSProvider::HdfcCards:
+                // No payout date in the file; both pay T+1. For HDFC cards the engine also
+                // takes earlier unpaid days, so a weekend paid on Monday still matches.
                 settleDate = txnDate ? txnDate + 1 : dateNull();
                 break;
 
@@ -1358,8 +1398,10 @@ public class PremPOSReconciliation
         drCrRaw    = strUpr(this.cellAt(_worksheet, _rowIdx, colDrCrType));
 
         // PhonePe: REVERSAL_TRANSACTION / REFUND. PayZapp: CR / DR = DR or a refund type.
+        // HDFC cards: VOID / REFUND.
         isRefund = strScan(txnTypeRaw, 'REVERSAL', 1, strLen(txnTypeRaw))
                 || strScan(txnTypeRaw, 'REFUND', 1, strLen(txnTypeRaw))
+                || strScan(txnTypeRaw, 'VOID', 1, strLen(txnTypeRaw))
                 || drCrRaw == 'DR';
 
         posStaging.clear();

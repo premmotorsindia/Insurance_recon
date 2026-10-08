@@ -929,13 +929,15 @@ public class PremBankRecMatchingEngine
         str                     terminalId, matchedBatch;
         boolean                 matchedOnTerminal;
         boolean                 upiSettlement;
+        boolean                 fromMerchantCode;
 
         // A UPI settlement names the MERCHANT, not the terminal: "UPI SETTLEMENT -SE2226-
         // 05/08/26". The terminal map knows which terminal that merchant belongs to, so
         // the merchant code is translated before giving up.
         if (!identifier)
         {
-            identifier = this.terminalFromMerchantCode(_staging.PremDescription);
+            identifier       = this.terminalFromMerchantCode(_staging.PremDescription);
+            fromMerchantCode = identifier != '';
         }
 
         if (!identifier)
@@ -947,12 +949,22 @@ public class PremBankRecMatchingEngine
             return;
         }
 
+        // A card settlement names the terminal by number. When that terminal has HDFC card
+        // sales (an HDFC terminal that also runs PayZapp UPI), the card rows are settled on
+        // their own; otherwise the normal POS match below applies.
+        if (!fromMerchantCode && this.matchHdfcCardSettlement(_staging, identifier))
+        {
+            return;
+        }
+
         // The acquirer settles a terminal's whole day in one credit, so total the day.
+        // HDFC card rows share the terminal number with PayZapp and are settled separately.
         select sum(NetSettlement) from pos
             where pos.TerminalId      == identifier
                && pos.SettlementDate  == txnDate
                && pos.RecordType      == PremPOSRecordType::Sale
-               && pos.Reconciled      == NoYes::No;
+               && pos.Reconciled      == NoYes::No
+               && pos.Provider        != PremPOSProvider::HdfcCards;
 
         dayTotal = pos.NetSettlement;
 
@@ -1020,7 +1032,8 @@ public class PremBankRecMatchingEngine
                 where pos.TerminalId     == terminalId
                    && pos.SettlementDate == txnDate
                    && pos.RecordType     == PremPOSRecordType::Sale
-                   && pos.Reconciled     == NoYes::No;
+                   && pos.Reconciled     == NoYes::No
+                   && pos.Provider       != PremPOSProvider::HdfcCards;
 
             upiSettlement = pos.Provider != PremPOSProvider::PineLabs;
         }
@@ -1064,7 +1077,8 @@ public class PremBankRecMatchingEngine
                 where posUpdate.TerminalId     == terminalId
                    && posUpdate.SettlementDate == txnDate
                    && posUpdate.RecordType     == PremPOSRecordType::Sale
-                   && posUpdate.Reconciled     == NoYes::No;
+                   && posUpdate.Reconciled     == NoYes::No
+                   && posUpdate.Provider       != PremPOSProvider::HdfcCards;
         }
         else if (matchedOnTerminal)
         {
@@ -1075,7 +1089,8 @@ public class PremBankRecMatchingEngine
                 where posUpdate.TerminalId     == terminalId
                    && posUpdate.SettlementDate == txnDate
                    && posUpdate.RecordType     == PremPOSRecordType::Sale
-                   && posUpdate.Reconciled     == NoYes::No;
+                   && posUpdate.Reconciled     == NoYes::No
+                   && posUpdate.Provider       != PremPOSProvider::HdfcCards;
         }
         else
         {
@@ -2407,7 +2422,8 @@ public class PremBankRecMatchingEngine
             where pos.TerminalId     == _terminalId
                && pos.SettlementDate == _settlementDate
                && pos.RecordType     == PremPOSRecordType::Sale
-               && pos.Reconciled     == NoYes::No;
+               && pos.Reconciled     == NoYes::No
+               && pos.Provider       != PremPOSProvider::HdfcCards;
 
         msf  = pos.MSFCharge;
         cgst = pos.CGSTAmount;
@@ -2527,6 +2543,168 @@ public class PremBankRecMatchingEngine
         }
 
         journalTrans.insert();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchHdfcCardSettlement</Name>
+				<Source><![CDATA[
+    // <summary>
+    // HDFC card settlement of a terminal: the bank pays the card gross less MSF, and the
+    // difference is booked as MSF.
+    //
+    //     Statement bank (HDFC)       Dr  bank credit
+    //     MSF expense                 Dr  gross - bank credit
+    //     Card clearing bank          Cr  gross
+    // </summary>
+    // <remarks>
+    // The HDFC transaction report has no settlement date, so every unpaid card sale of the
+    // terminal up to the credit date is taken: a weekend paid on Monday then still adds up.
+    // A difference outside 0 to 5 percent of the gross is not an MSF, so the line goes to
+    // the manual queue rather than booking it.
+    // </remarks>
+    // <returns>false when the terminal has no unpaid HDFC card sales - the caller then runs
+    // the normal POS match; true when the line was handled (matched or queued).</returns>
+    private boolean matchHdfcCardSettlement(PremBankStmtStaging _staging, str _terminalId)
+    {
+        PremPOSSettlementStaging    pos, posUpdate;
+        PremPOSTerminalMap          terminalMap;
+        TransDate                   txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        AmountMST                   gross, charge;
+        LedgerDimensionAccount      msfLedger;
+        LedgerJournalId             journalNum;
+
+        select sum(GrossAmount) from pos
+            where pos.TerminalId     == _terminalId
+               && pos.Provider       == PremPOSProvider::HdfcCards
+               && pos.RecordType     == PremPOSRecordType::Sale
+               && pos.Reconciled     == NoYes::No
+               && pos.SettlementDate <= txnDate;
+
+        gross = pos.GrossAmount;
+
+        if (!gross)
+        {
+            return false;
+        }
+
+        charge = gross - _staging.Amount;
+
+        if (charge < 0 || charge > gross * 0.05)
+        {
+            _staging.markManual(strFmt(
+                "HDFC cards %1: unpaid card sales up to %2 total %3 but the bank credited %4. "
+                + "The difference %5 is not an MSF (0 to 5 percent). Import the missing HDFC report "
+                + "or check the terminal.", _terminalId, txnDate, gross, _staging.Amount, charge));
+            this.manualQueued++;
+            return true;
+        }
+
+        terminalMap = PremPOSTerminalMap::findByTerminalId(_terminalId);
+
+        if (!terminalMap.CardSettlementBankAccount)
+        {
+            _staging.markManual(strFmt(
+                "HDFC cards %1: no card clearing bank account in POS terminal mapping. "
+                + "Set it, then reclassify this line.", _terminalId));
+            this.manualQueued++;
+            return true;
+        }
+
+        if (charge)
+        {
+            msfLedger = terminalMap.MSFExpenseAccount
+                ? terminalMap.MSFExpenseAccount
+                : PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::MSFExpense, _staging.BankAccountId);
+
+            if (!msfLedger)
+            {
+                _staging.markManual(strFmt(
+                    "HDFC cards %1: no MSF expense account. Set it on POS terminal mapping or in the "
+                    + "account mapping grid (MSF expense).", _terminalId));
+                this.manualQueued++;
+                return true;
+            }
+        }
+
+        journalNum = this.createCardSettlementJournal(
+            _staging,
+            terminalMap.CardSettlementBankAccount,
+            msfLedger,
+            gross,
+            charge,
+            strFmt("HDFC card settlement - Terminal %1 - %2", _terminalId, txnDate));
+
+        if (!journalNum)
+        {
+            _staging.markManual(strFmt("HDFC cards %1: settlement journal could not be created", _terminalId));
+            this.manualQueued++;
+            return true;
+        }
+
+        update_recordset posUpdate
+            setting Reconciled           = NoYes::Yes,
+                    ReconciledStagingId  = _staging.RecId,
+                    SettlementJournalNum = journalNum,
+                    MSFPosted            = NoYes::Yes,
+                    MSFJournalNum        = journalNum
+            where posUpdate.TerminalId     == _terminalId
+               && posUpdate.Provider       == PremPOSProvider::HdfcCards
+               && posUpdate.RecordType     == PremPOSRecordType::Sale
+               && posUpdate.Reconciled     == NoYes::No
+               && posUpdate.SettlementDate <= txnDate;
+
+        _staging.MatchedRefId      = _terminalId;
+        _staging.MatchedJournalNum = journalNum;
+        _staging.MappingType       = PremMappingType::POSTOBANKMAPPING;
+        _staging.markReconciled(0, strFmt("HDFC card settlement matched: terminal %1, gross %2, MSF %3",
+            _terminalId, gross, charge));
+        this.autoPosted++;
+
+        return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createCardSettlementJournal</Name>
+				<Source><![CDATA[
+    private LedgerJournalId createCardSettlementJournal(
+        PremBankStmtStaging     _staging,
+        BankAccountID           _clearingBank,
+        LedgerDimensionAccount  _msfLedger,
+        AmountMST               _gross,
+        AmountMST               _charge,
+        str                     _narration)
+    {
+        PremBankRecParameters   params = PremBankRecParameters::find();
+        LedgerJournalTable      journalTable;
+        Voucher                 voucher;
+
+        if (!params.BankJournalName)
+        {
+            error("No Bank journal name configured in Bank Reconciliation Parameters.");
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.insert();
+
+        voucher = PremBankRecHelper::nextJournalVoucher(journalTable);
+
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
+            _staging.BankAccountId, 0, _staging.Amount, _narration);
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Ledger,
+            '', _msfLedger, _charge, strFmt("MSF - %1", _narration));
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
+            _clearingBank, 0, -_gross, _narration);
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
     }
 
 ]]></Source>
