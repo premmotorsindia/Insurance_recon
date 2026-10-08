@@ -2559,8 +2559,10 @@ public class PremBankRecMatchingEngine
     //     Card clearing bank          Cr  gross
     // </summary>
     // <remarks>
-    // The HDFC transaction report has no settlement date, so every unpaid card sale of the
-    // terminal up to the credit date is taken: a weekend paid on Monday then still adds up.
+    // The narration ends with the sales date the credit covers - "63075144TERMINAL 1 CARDS
+    // SETTL. 03/10/26" - so every unpaid card sale of the terminal up to that date is taken
+    // (a weekend paid in one credit still adds up). Without a readable date, the unpaid
+    // sales due up to the credit date are taken instead.
     // A difference outside 0 to 5 percent of the gross is not an MSF, so the line goes to
     // the manual queue rather than booking it.
     // </remarks>
@@ -2570,7 +2572,8 @@ public class PremBankRecMatchingEngine
     {
         PremPOSSettlementStaging    pos, posUpdate;
         PremPOSTerminalMap          terminalMap;
-        TransDate                   txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        TransDate                   txnDate    = DateTimeUtil::date(_staging.TxnDateTime);
+        TransDate                   salesUpTo  = PremBankRecMatchingEngine::dateFromNarration(_staging.PremDescription);
         AmountMST                   gross, charge;
         LedgerDimensionAccount      msfLedger;
         LedgerJournalId             journalNum;
@@ -2580,7 +2583,8 @@ public class PremBankRecMatchingEngine
                && pos.Provider       == PremPOSProvider::HdfcCards
                && pos.RecordType     == PremPOSRecordType::Sale
                && pos.Reconciled     == NoYes::No
-               && pos.SettlementDate <= txnDate;
+               && ((salesUpTo  && pos.TxnDate        <= salesUpTo)
+                || (!salesUpTo && pos.SettlementDate <= txnDate));
 
         gross = pos.GrossAmount;
 
@@ -2596,7 +2600,8 @@ public class PremBankRecMatchingEngine
             _staging.markManual(strFmt(
                 "HDFC cards %1: unpaid card sales up to %2 total %3 but the bank credited %4. "
                 + "The difference %5 is not an MSF (0 to 5 percent). Import the missing HDFC report "
-                + "or check the terminal.", _terminalId, txnDate, gross, _staging.Amount, charge));
+                + "or check the terminal.", _terminalId, salesUpTo ? salesUpTo : txnDate, gross,
+                _staging.Amount, charge));
             this.manualQueued++;
             return true;
         }
@@ -2653,7 +2658,8 @@ public class PremBankRecMatchingEngine
                && posUpdate.Provider       == PremPOSProvider::HdfcCards
                && posUpdate.RecordType     == PremPOSRecordType::Sale
                && posUpdate.Reconciled     == NoYes::No
-               && posUpdate.SettlementDate <= txnDate;
+               && ((salesUpTo  && posUpdate.TxnDate        <= salesUpTo)
+                || (!salesUpTo && posUpdate.SettlementDate <= txnDate));
 
         _staging.MatchedRefId      = _terminalId;
         _staging.MatchedJournalNum = journalNum;
@@ -2663,6 +2669,56 @@ public class PremBankRecMatchingEngine
         this.autoPosted++;
 
         return true;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>dateFromNarration</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The date a card settlement narration ends with: "... CARDS SETTL. 03/10/26" gives
+    // 03-Oct-2026 (dd/MM/yy, or dd/MM/yyyy). dateNull() when the narration ends otherwise.
+    // </summary>
+    public static TransDate dateFromNarration(str _description)
+    {
+        str  text = strLRTrim(_description);
+        int  len  = strLen(text);
+        str  tail;
+        int  day, month, year;
+
+        if (len >= 10)
+        {
+            tail = subStr(text, len - 9, 10);
+
+            if (subStr(tail, 3, 1) == '/' && subStr(tail, 6, 1) == '/' && strKeep(subStr(tail, 7, 4), '0123456789') == subStr(tail, 7, 4))
+            {
+                day   = str2Int(subStr(tail, 1, 2));
+                month = str2Int(subStr(tail, 4, 2));
+                year  = str2Int(subStr(tail, 7, 4));
+
+                return mkDate(day, month, year);
+            }
+        }
+
+        if (len >= 8)
+        {
+            tail = subStr(text, len - 7, 8);
+
+            if (subStr(tail, 3, 1) == '/' && subStr(tail, 6, 1) == '/')
+            {
+                day   = str2Int(subStr(tail, 1, 2));
+                month = str2Int(subStr(tail, 4, 2));
+                year  = str2Int(subStr(tail, 7, 2));
+
+                if (day && month)
+                {
+                    return mkDate(day, month, 2000 + year);
+                }
+            }
+        }
+
+        return dateNull();
     }
 
 ]]></Source>

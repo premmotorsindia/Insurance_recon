@@ -58,13 +58,13 @@ bank is emptied by the gross the sales put into it:
 
 Those rows are stamped MSF posted, and `processMSFCharges` only raises PineLabs rows.
 
-HDFC cards: the SmartHub report has no MSF. When a card settlement line names a terminal
-that has unpaid HDFC card sales, the engine takes every unpaid card sale of that terminal up
-to the credit date and posts
+HDFC cards: the SmartHub report has no MSF. The bank credit reads
+`63075144TERMINAL 1 CARDS SETTL. 03/10/26` - terminal number first, sales date last. The
+engine takes every unpaid card sale of that terminal up to that sales date and posts
 
     Statement bank (HDFC)          Dr  bank credit
     MSF expense                    Dr  gross - bank credit   (must be 0 to 5 % of gross)
-    Card clearing bank             Cr  gross                 (terminal's Card clearing bank account)
+    Card clearing bank             Cr  gross                 (terminal's Card clearing bank account, e.g. HDFCCC5144)
 
 BharatQR / UPI rows of that report are skipped: they settle through the PayZapp payout report.
 
