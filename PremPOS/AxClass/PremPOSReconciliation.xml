@@ -618,11 +618,14 @@ public class PremPOSReconciliation
 
         journalId = journalTable.JournalNum;
 
+        // PhonePe / MobiKwik / PayZapp charges are posted inside their settlement voucher
+        // by the bank rec engine (R02), so only PineLabs rows are raised here.
         while select sum(MSFCharge), sum(CGSTAmount), sum(SGSTAmount), sum(IGSTAmount) from posStg
             group by TerminalId
             where posStg.BatchRunId     == batchRunId
                && posStg.SettlementDate == settlementDate
                && posStg.RecordType     == PremPOSRecordType::Sale
+               && posStg.Provider       == PremPOSProvider::PineLabs
         {
             select firstonly terminalMap
                 where terminalMap.TerminalId == posStg.TerminalId;

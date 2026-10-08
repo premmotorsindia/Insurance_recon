@@ -1,0 +1,3367 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<AxClass xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Name>PremBankRecMatchingEngine</Name>
+	<SourceCode>
+		<Declaration><![CDATA[
+// <summary>
+// Core reconciliation engine - implements the 13 matching rules (Strategy
+// pattern: each rule has its own match method) and routes each staging
+// record to its handler.
+// </summary>
+public class PremBankRecMatchingEngine
+{
+    private BankAccountID       bankAccountId;
+    private TransDate           processDate;
+    private int                 totalProcessed;
+    private int                 autoMatched;
+    private int                 autoPosted;
+    private int                 manualQueued;
+    private container           errorLog;
+    private NoYes               runPOS;         // Honours the dialog's "Include POS Reconciliation" toggle
+    private TransDate           fromDate;       // Statement date range from the dialog - both
+    private TransDate           toDate;         // optional; blank means "no bound on that side"
+    private PremReconMethod     reconMethod;    // Custom engine only, or also build a standard statement
+    private str                 insuranceTrace; // Why each insurance mapping row was accepted or rejected
+}
+]]></Declaration>
+		<Methods>
+			<Method>
+				<Name>routeDebitComponent</Name>
+				<Source><![CDATA[
+    // <summary>
+    // A bank debit booked against a component (loan repayment, interest, GST, TDS ...).
+    // Ledger row -> the ledger journal as before; customer / vendor row -> the mapped
+    // route, reviewed before posting. Nothing mapped -> manual queue.
+    // </summary>
+    private void routeDebitComponent(
+        PremBankStmtStaging  _staging,
+        PremBankRecComponent _component,
+        str                  _what,
+        TransDate            _postingDate = dateNull())
+    {
+        if (PremBankRecMatchingEngine::mapsToParty(_component, _staging.BankAccountId))
+        {
+            this.routeToMappedAccount(_staging, _component, _what);
+            return;
+        }
+
+        this.routeBankDebitToLedger(
+            _staging,
+            PremLedgerDimHelper::ledgerForComponent(_component, _staging.BankAccountId),
+            _what,
+            strFmt("%1 (account mapping component)", _component),
+            _postingDate);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>mapsToParty</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True when the component is mapped to a customer or a vendor for this bank account.
+    // </summary>
+    public static boolean mapsToParty(PremBankRecComponent _component, BankAccountID _bankAccountId)
+    {
+        PremBankRecAccountMap map = PremBankRecAccountMap::find(_component, _bankAccountId);
+
+        return map.RecId && map.AccountType != LedgerJournalACType::Ledger;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>interestPostingDate</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The period an interest debit belongs to, read from "Interest debited till 30-APR-2026".
+    // dateNull() when the narration carries no such date, so the statement date is used.
+    // </summary>
+    public static TransDate interestPostingDate(str _description)
+    {
+        str       u   = strUpr(_description);
+        int       pos = strScan(u, 'TILL ', 1, strLen(u));
+        container parts;
+        int       day, mon, yr;
+
+        if (!pos)
+        {
+            return dateNull();
+        }
+
+        // keep the pieces as strings - by default str2con turns "30" into an integer
+        parts = str2con(strLRTrim(subStr(u, pos + 5, 11)), '-', false);
+
+        if (conLen(parts) < 3)
+        {
+            return dateNull();
+        }
+
+        day = str2Int(conPeek(parts, 1));
+        mon = conFind(['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
+                       'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'], conPeek(parts, 2));
+        yr  = str2Int(conPeek(parts, 3));
+
+        if (day < 1 || day > 31 || !mon || yr < 2000)
+        {
+            return dateNull();
+        }
+
+        return mkDate(day, mon, yr);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findReturnedEntry</Name>
+				<Source><![CDATA[
+    // <summary>
+    // The line a cheque return reverses: same bank account, same reference, and the
+    // opposite of the returned amount (a returned deposit reverses a credit, a returned
+    // issued cheque reverses a debit). Finance remark: "check reference number, amount
+    // (both) and treatment corresponding entry".
+    // </summary>
+    private PremBankStmtStaging findReturnedEntry(PremBankStmtStaging _return)
+    {
+        PremBankStmtStaging original;
+
+        if (!_return.ReferenceNo)
+        {
+            return original;
+        }
+
+        select firstonly original
+            order by TxnDateTime desc
+            where original.BankAccountId == _return.BankAccountId
+               && original.ReferenceNo   == _return.ReferenceNo
+               && original.Amount        == -_return.Amount
+               && original.RecId         != _return.RecId
+               && original.TxnDateTime   <= _return.TxnDateTime;
+
+        return original;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeStatutoryToLedger</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-19: TDS / TCS (CBDT), ESIC, EPFO and the NSE mutual-fund debit go straight to a
+    // ledger. Each has its own ledger, taken from the account mapping grid on Bank
+    // reconciliation parameters under the purpose named below.
+    // </summary>
+    private void routeStatutoryToLedger(PremBankStmtStaging _staging)
+    {
+        PremBankRecComponent component = PremBankRecMatchingEngine::statutoryPurpose(_staging.PremDescription);
+
+        if (component == PremBankRecComponent::NotSet)
+        {
+            _staging.markManual("Statutory payment - the narration does not say TDS, ESIC, EPFO or NSE MFS");
+            this.manualQueued++;
+            return;
+        }
+
+        this.routeDebitComponent(_staging, component, strFmt("%1 payment", component));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>statutoryPurpose</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Account-mapping purpose for a statutory debit, read from the narration.
+    // </summary>
+    public static PremBankRecComponent statutoryPurpose(str _description)
+    {
+        str u = strUpr(_description);
+        int len = strLen(u);
+
+        if (strScan(u, 'CBDT', 1, len))
+        {
+            return PremBankRecComponent::TDS;
+        }
+
+        if (strScan(u, 'EPFO', 1, len))
+        {
+            return PremBankRecComponent::EPFO;
+        }
+
+        if (strScan(u, 'ESI', 1, len))
+        {
+            return PremBankRecComponent::ESIC;
+        }
+
+        if (strScan(u, 'NSEMFS', 1, len))
+        {
+            return PremBankRecComponent::NSEMFS;
+        }
+
+        return PremBankRecComponent::NotSet;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeFscAdvance</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-21: FSC customer. Finance remark: "check reference number, amount (both) ...
+    // same day and this rule first" - an FSC receipt already in the bank book for the same
+    // day, amount and reference is reconciled against it before any advance is raised.
+    // </summary>
+    private void routeFscAdvance(PremBankStmtStaging _staging)
+    {
+        BankAccountTrans bankTrans;
+        TransDate        txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+
+        if (_staging.ReferenceNo)
+        {
+            select firstonly bankTrans
+                where bankTrans.AccountID  == _staging.BankAccountId
+                   && bankTrans.AmountCur  == _staging.Amount
+                   && bankTrans.TransDate  == txnDate
+                   && bankTrans.Reconciled == NoYes::No
+                   && (bankTrans.PaymReference == _staging.ReferenceNo
+                    || bankTrans.ChequeNum     == _staging.ReferenceNo);
+
+            if (bankTrans.RecId)
+            {
+                this.reconcileMatch(_staging, bankTrans.RecId,
+                    strFmt("FSC receipt matched same day on reference %1 and amount %2",
+                        _staging.ReferenceNo, _staging.Amount));
+                return;
+            }
+        }
+
+        this.routeToMappedAccount(_staging, PremBankRecComponent::FSC, "FSC customer advance");
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeToMappedAccount</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Book a line against the account mapped to a purpose in PremBankRecAccountMap -
+    // ledger, customer or bank, set per bank account on the parameters form. Used by
+    // R-20 (PMJPL), R-21 (FSC) and R-22 (trade advance).
+    // </summary>
+    // <remarks>
+    // Left unposted for review, like the customer advance: these are holding entries that
+    // someone re-allocates, so a person should see them before they hit the ledger.
+    // </remarks>
+    private void routeToMappedAccount(PremBankStmtStaging _staging, PremBankRecComponent _purpose, str _what)
+    {
+        // The party named in the narration decides the offset - an advance can be a
+        // customer's card or a vendor's, depending on who sent it. Falls back to the
+        // generic purpose when no party row matches.
+        PremBankRecAccountMap map = PremBankRecAccountMap::findForNarration(
+            _staging.PremDescription, _staging.BankAccountId, _purpose);
+        LedgerJournalId       journalNum;
+
+        if (!map.RecId)
+        {
+            _staging.markManual(strFmt(
+                "%1 of %2 - no account mapped for purpose '%3'. Add it in the account mapping "
+                + "grid on Bank reconciliation parameters (component '%3'), then reclassify this line.",
+                _what, _staging.Amount, _purpose));
+            this.manualQueued++;
+            return;
+        }
+
+        journalNum = this.createMappedAccountJournal(
+            _staging,
+            map,
+            strFmt("%1 - %2", _what, _staging.PremDescription));
+
+        if (!journalNum)
+        {
+            _staging.markManual(strFmt("%1 of %2 - journal could not be created",
+                _what, _staging.Amount));
+            this.manualQueued++;
+            return;
+        }
+
+        _staging.MatchedJournalNum = journalNum;
+        _staging.markManual(strFmt("%1 journal %2 created against %3 %4 (mapping '%5') - review and post",
+            _what, journalNum, map.AccountType,
+            map.AccountType == LedgerJournalACType::Ledger ? 'ledger' : map.AccountNum,
+            map.PartyText ? map.PartyText : enum2Str(map.Component)));
+        this.manualQueued++;
+
+        PremBankRecAuditLog::logEvent(
+            _staging.RecId,
+            "MAPPED_ACCOUNT_JOURNAL",
+            strFmt("%1 | Journal %2 | Mapping %3 | %4 %5 | Amount %6 | %7",
+                _what, journalNum, map.PartyText ? map.PartyText : enum2Str(map.Component),
+                map.AccountType, map.AccountNum,
+                _staging.Amount, _staging.PremDescription));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createMappedAccountJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // One unposted journal line: the bank against the mapped account. Money in debits the
+    // bank, money out credits it - so PMJPL works in both directions ("FROM PMJPL" and
+    // "TO PMJPL").
+    // </summary>
+    private LedgerJournalId createMappedAccountJournal(
+        PremBankStmtStaging   _staging,
+        PremBankRecAccountMap _map,
+        str                   _narration)
+    {
+        LedgerJournalTable    journalTable;
+        LedgerJournalTrans    journalTrans;
+        PremBankRecParameters params = PremBankRecParameters::find(_staging.BankAccountId);
+        LedgerJournalNameId   journalName;
+        real                  amountAbs = abs(_staging.Amount);
+
+        journalName = _map.AccountType == LedgerJournalACType::Cust
+            ? params.CustPaymentJournalName
+            : params.BankJournalName;
+
+        if (!journalName)
+        {
+            PremBankRecAuditLog::logEvent(
+                _staging.RecId,
+                "MAPPED_ACCOUNT_NO_JOURNAL_NAME",
+                "Journal name is not set in Bank reconciliation parameters");
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = journalName;
+        journalTable.Name        = strFmt("%1 %2", _map.Component, _staging.BankAccountId);
+        journalTable.insert();
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum       = journalTable.JournalNum;
+        journalTrans.Voucher          = PremBankRecHelper::nextJournalVoucher(journalTable);
+        journalTrans.DefaultDimension = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        journalTrans.TransDate        = DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType      = LedgerJournalACType::Bank;
+        journalTrans.BankAccountId    = _staging.BankAccountId;
+        journalTrans.LedgerDimension  =
+            LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+                _staging.BankAccountId,
+                LedgerJournalACType::Bank);
+        journalTrans.OffsetAccountType = _map.AccountType;
+
+        if (_map.AccountType == LedgerJournalACType::Ledger)
+        {
+            journalTrans.OffsetLedgerDimension = _map.LedgerDim;
+        }
+        else
+        {
+            journalTrans.OffsetLedgerDimension =
+                LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+                    _map.AccountNum,
+                    _map.AccountType);
+        }
+
+        // The side comes from the C/D flag. Amount is the unsigned magnitude the
+        // statement prints, so testing its sign posted every debit as a bank debit.
+        if (_staging.isCredit())
+        {
+            journalTrans.AmountCurDebit = amountAbs;
+        }
+        else
+        {
+            journalTrans.AmountCurCredit = amountAbs;
+        }
+
+        journalTrans.CurrencyCode = 'INR';
+        journalTrans.Txt          = _narration;
+        journalTrans.DocumentNum  = _staging.ReferenceNo;
+        journalTrans.insert();
+
+        // Intentionally not posted - reviewed first, like the customer advance.
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>new</Name>
+				<Source><![CDATA[
+    public void new(
+        BankAccountID _bankAccountId,
+        TransDate _processDate = dateNull(),
+        NoYes _runPOS = NoYes::No,
+        TransDate _fromDate = dateNull(),
+        TransDate _toDate = dateNull(),
+        PremReconMethod _reconMethod = PremReconMethod::CustomEngineOnly)
+    {
+        this.bankAccountId  = PremBankRecHelper::resolveAccountId(_bankAccountId);
+        this.reconMethod    = _reconMethod;
+        this.processDate    = _processDate ? _processDate : systemDateGet();
+        this.totalProcessed = 0;
+        this.autoMatched    = 0;
+        this.autoPosted     = 0;
+        this.manualQueued   = 0;
+        this.errorLog       = conNull();
+        this.runPOS         = _runPOS;
+        this.fromDate       = _fromDate;
+        this.toDate         = _toDate;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>construct</Name>
+				<Source><![CDATA[
+    public static PremBankRecMatchingEngine construct(
+        BankAccountID _bankAccountId,
+        TransDate _processDate = dateNull(),
+        NoYes _runPOS = NoYes::No,
+        TransDate _fromDate = dateNull(),
+        TransDate _toDate = dateNull(),
+        PremReconMethod _reconMethod = PremReconMethod::CustomEngineOnly)
+    {
+        return new PremBankRecMatchingEngine(
+            _bankAccountId, _processDate, _runPOS, _fromDate, _toDate, _reconMethod);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>run</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Main entry point - process all pending/classified staging records.
+    // </summary>
+    public void run()
+    {
+        PremBankStmtStaging staging;
+        utcdatetime fromDateTime, toDateTime;
+        int         infologMark;
+
+        // Honour the dialog's date range. TxnDateTime is a utcdatetime, so the bounds have
+        // to cover the whole day - a bare date would compare against 00:00:00 and drop
+        // every transaction on toDate itself. A blank date leaves that side unbounded.
+        fromDateTime = this.fromDate
+            ? DateTimeUtil::newDateTime(this.fromDate, 0)
+            : DateTimeUtil::minValue();
+        toDateTime   = this.toDate
+            ? DateTimeUtil::newDateTime(this.toDate, 86399)
+            : DateTimeUtil::maxValue();
+
+        info(strFmt("Starting matching engine for %1 (%2 to %3)",
+                this.bankAccountId,
+                this.fromDate ? date2Str(this.fromDate, 123, 2, 4, 2, 4, 4) : "no start",
+                this.toDate   ? date2Str(this.toDate,   123, 2, 4, 2, 4, 4) : "no end"));
+
+        while select forupdate staging
+            where staging.BankAccountId == this.bankAccountId
+               && (staging.ImportStatus == PremBankStmtStatus::Pending
+                || staging.ImportStatus == PremBankStmtStatus::Classified)
+               && staging.TxnDateTime   >= fromDateTime
+               && staging.TxnDateTime   <= toDateTime
+        {
+            this.totalProcessed++;
+
+            // Remember where the infolog stands so a failure reports THIS row's messages
+            // rather than whatever was last written to the buffer.
+            infologMark = infologLine();
+
+            try
+            {
+                ttsbegin;
+                this.dispatchRule(staging);
+                ttscommit;
+            }
+            // Catch Error and CLRError too, not just Internal: a handler that calls error()
+            // raises Exception::Error, which used to escape this loop and abort the entire
+            // run - one unconfigured workflow or one bad line killed all remaining rows.
+            // ttsabort is required before continuing, otherwise the transaction stays
+            // doomed and the next ttscommit fails on a row that was perfectly fine.
+            catch (Exception::Internal)
+            {
+                ttsabort;
+                this.logRowFailure(staging.RecId, PremBankRecHelper::infologSince(infologMark));
+            }
+            catch (Exception::Error)
+            {
+                ttsabort;
+                this.logRowFailure(staging.RecId, PremBankRecHelper::infologSince(infologMark));
+            }
+            catch (Exception::CLRError)
+            {
+                System.Exception clrEx = CLRInterop::getLastException();
+                ttsabort;
+                this.logRowFailure(staging.RecId,
+                    clrEx != null ? clrEx.get_Message() : "Unknown CLR error");
+            }
+        }
+
+        // Only when the caller actually asked for it - the dialog's "Include POS
+        // Reconciliation" toggle. Running it unconditionally builds an MSF+GST journal
+        // with no lines whenever POS settlement data hasn't been imported, and posting
+        // an empty journal fails with "No vouchers in the journal can be posted".
+        if (this.runPOS == NoYes::Yes)
+        {
+            this.runPOSReconciliation();
+        }
+
+        // Both approaches stay available. The custom engine has just done the matching; on
+        // top of that, the standard basic-reconciliation statement can be built from the
+        // lines it reconciled, so the same run feeds D365's own reconciliation as well.
+        if (this.reconMethod == PremReconMethod::CustomEngineAndStatement)
+        {
+            this.buildStandardStatement();
+        }
+
+        this.logRunSummary();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>workflowIsConfigured</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True when an enabled workflow configuration exists for this template. Without one
+    // Workflow::activateFromWorkflowType reports an infolog error instead of throwing.
+    // </summary>
+    public static boolean workflowIsConfigured(str _templateName)
+    {
+        WorkflowTable        workflowTable;
+        WorkflowVersionTable workflowVersion;
+
+        select firstonly RecId from workflowTable
+            where workflowTable.TemplateName == _templateName
+            join RecId from workflowVersion
+                where workflowVersion.WorkflowTable == workflowTable.RecId
+                   && workflowVersion.Enabled       == NoYes::Yes;
+
+        return workflowTable.RecId != 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>logRowFailure</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Record a row that blew up during dispatch and park it for manual review. Runs in its
+    // own transaction because the caller has just aborted the failed one.
+    // </summary>
+    private void logRowFailure(RefRecId _recId, str _reason)
+    {
+        PremBankStmtStaging staging;
+
+        this.errorLog += [strFmt("Error processing RecId %1: %2", _recId, _reason)];
+
+        try
+        {
+            ttsbegin;
+
+            // Re-read the row instead of reusing the caller's buffer. That buffer was
+            // filled before the failed transaction was aborted, so its RecVersion no
+            // longer matches the database and updating it raises "Cannot edit a record ...
+            // update conflict occurred".
+            select forupdate staging where staging.RecId == _recId;
+
+            if (staging.RecId)
+            {
+                staging.markManual(strFmt("Engine error: %1", _reason));
+            }
+
+            ttscommit;
+            this.manualQueued++;
+        }
+        catch (Exception::Error)
+        {
+            ttsabort;
+        }
+        catch (Exception::CLRError)
+        {
+            CLRInterop::getLastException();
+            ttsabort;
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>dispatchRule</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Route each record to its specific rule handler.
+    // </summary>
+    private void dispatchRule(PremBankStmtStaging _staging)
+    {
+        switch (_staging.MatchRule)
+        {
+            case PremRecMatchRule::R01_UTR_Credit:
+                this.matchUTRToUTR(_staging);
+                break;
+
+            case PremRecMatchRule::R02_POS_Settlement:
+                this.matchPOSSettlement(_staging);
+                break;
+
+            case PremRecMatchRule::R03_Cheque_Issued:
+                this.matchIssuedCheque(_staging);
+                break;
+
+            case PremRecMatchRule::R04_Cash_Deposit:
+                this.matchCashDeposit(_staging);
+                break;
+
+            case PremRecMatchRule::R05_Cheque_Deposit:
+                this.matchChequeDeposit(_staging);
+                break;
+
+            case PremRecMatchRule::R07_NEFT_Debit:
+                this.matchOutgoingNEFT(_staging);
+                break;
+
+            case PremRecMatchRule::R06_Bank_To_Bank:
+                this.matchBankToBank(_staging);
+                break;
+
+            case PremRecMatchRule::R08_NEFT_Return:
+                this.matchNEFTReturn(_staging);
+                break;
+
+            case PremRecMatchRule::R09_Cheque_Return:
+                this.handleChequeReturn(_staging);
+                break;
+
+            case PremRecMatchRule::R10_Insurance_Receipt:
+                this.routeInsuranceReceipt(_staging);
+                break;
+
+            case PremRecMatchRule::R16_Loan_Repayment:
+                this.routeDebitComponent(_staging, PremBankRecComponent::LoanLiability,
+                    "Loan / WCDL repayment");
+                break;
+
+            case PremRecMatchRule::R17_Bank_Interest:
+                // 19-Sep remark: the JV takes the date in the narration - "Interest debited
+                // till 30-APR-2026" is booked on 30-Apr, not on the 1-May statement date.
+                this.routeDebitComponent(_staging, PremBankRecComponent::InterestExpense,
+                    "Bank / loan interest",
+                    PremBankRecMatchingEngine::interestPostingDate(_staging.PremDescription));
+                break;
+
+            case PremRecMatchRule::R18_GST_Payment:
+                this.routeDebitComponent(_staging, PremBankRecComponent::GSTPayable,
+                    "GST payment");
+                break;
+
+            case PremRecMatchRule::R15_Loan_Disbursement:
+                this.routeLoanDisbursement(_staging);
+                break;
+
+            case PremRecMatchRule::R14_Customer_Advance:
+                this.routeCustomerAdvance(_staging);
+                break;
+
+            case PremRecMatchRule::R13_Bank_Charge:
+                this.routeSettlementCharges(_staging);
+                break;
+
+            case PremRecMatchRule::R19_Bank_To_Ledger:
+                this.routeStatutoryToLedger(_staging);
+                break;
+
+            case PremRecMatchRule::R20_PMJPL_Intercompany:
+                this.routeToMappedAccount(_staging, PremBankRecComponent::PMJPL, "PMJPL intercompany JV");
+                break;
+
+            case PremRecMatchRule::R21_FSC_Customer_Advance:
+                this.routeFscAdvance(_staging);
+                break;
+
+            case PremRecMatchRule::R22_Trade_Advance:
+                this.routeToMappedAccount(_staging, PremBankRecComponent::TradeAdvance, "Trade advance");
+                break;
+
+            default:
+                _staging.markManual("Unclassified - manual review required");
+                this.manualQueued++;
+                break;
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>isReversalPair</Name>
+				<Source><![CDATA[
+    // <summary>
+    // True when a D365 narration marks the line as a reversal or its correction.
+    // </summary>
+    // <remarks>
+    // A mis-keyed UTR gets fixed with three lines carrying the same amount: the original
+    // receipt, a "REVERSE DUE UTR WRONG-<voucher>" contra and a "RECTIFY-<voucher>"
+    // re-post. Matching on amount alone can land the statement credit on any of the three,
+    // so the two correction lines are skipped and the original is left to win.
+    // </remarks>
+    private static boolean isReversalPair(str _text)
+    {
+        str upper = strUpr(_text);
+
+        if (!_text)
+        {
+            return false;
+        }
+
+        return strScan(upper, 'REVERSE', 1, strLen(upper)) > 0
+            || strScan(upper, 'REVERSAL', 1, strLen(upper)) > 0
+            || strScan(upper, 'RECTIFY', 1, strLen(upper)) > 0
+            || strScan(upper, 'WRONG UTR', 1, strLen(upper)) > 0
+            || strScan(upper, 'UTR WRONG', 1, strLen(upper)) > 0;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchUTRToUTR</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-01: Match NEFT/RTGS/IMPS credit by UTR.
+    // </summary>
+    private void matchUTRToUTR(PremBankStmtStaging _staging)
+    {
+        BankAccountTrans bankTrans;
+        CustTrans custTrans;
+        PremBankStmtStaging claimed;   // used only by the notexists guards below
+        str utr   = _staging.ExtractedUTR;
+        str last6 = PremBankRecHelper::extractLast6(utr);
+
+        // Wildcard pattern for a 'like' comparison. This has to be 'like', not strScan:
+        // strScan inside a select-where is not translated into SQL, so the predicate never
+        // held and these lookups silently returned nothing even when the row was sitting
+        // right there - a matching BankAccountTrans and CustTrans both existed for
+        // last-6 699638 and neither was found.
+        str last6Pattern = '*' + last6 + '*';
+
+        // The last 6 digits are the reference key, not the whole UTR. The bank's own
+        // prefix differs from what gets keyed against the payment in D365
+        // ("YESAP62174085966" vs a voucher carrying only "085966"), so an exact compare
+        // matched almost nothing while the trailing sequence is the part both sides share.
+        // Exact is still tried first: when it does match it is unambiguous.
+        if (utr)
+        {
+            select firstonly bankTrans
+                where bankTrans.AccountID     == _staging.BankAccountId
+                   && bankTrans.AmountCur     == _staging.Amount
+                   && bankTrans.Reconciled    == NoYes::No
+                   && bankTrans.Voucher       == utr
+                // Skip anything another statement line has already claimed. Reconciled is
+                // NOT set at match time to keep this out: that flag belongs to posting a
+                // statement, and setting it here would stop the transaction ever appearing
+                // on one - and would block unmark(), which only releases unreconciled rows.
+                notexists join claimed
+                    where claimed.MatchedRecId == bankTrans.RecId
+                       && claimed.ImportStatus == PremBankStmtStatus::Reconciled;
+
+            if (bankTrans.RecId)
+            {
+                this.reconcileMatch(_staging, bankTrans.RecId,
+                    strFmt("Exact UTR match: %1", utr));
+                return;
+            }
+        }
+
+        if (last6)
+        {
+            // Last 6 digits anywhere in the voucher or the transaction text. Amount still
+            // has to agree, which is what keeps a 6-digit key from matching the wrong row.
+            while select bankTrans
+                where bankTrans.AccountID  == _staging.BankAccountId
+                   && (bankTrans.AmountCur == _staging.Amount
+                    || bankTrans.AmountCur == -_staging.Amount)
+                   && bankTrans.Reconciled == NoYes::No
+                   && (bankTrans.Voucher       like last6Pattern
+                    || bankTrans.Txt           like last6Pattern
+                    || bankTrans.PaymReference like last6Pattern)
+                notexists join claimed
+                    where claimed.MatchedRecId == bankTrans.RecId
+                       && claimed.ImportStatus == PremBankStmtStatus::Reconciled
+            {
+                // A reversal or its rectification carries the same amount and the same
+                // digits as the genuine line; skip both so the original wins.
+                if (PremBankRecMatchingEngine::isReversalPair(bankTrans.Txt))
+                {
+                    continue;
+                }
+
+                this.reconcileMatch(_staging, bankTrans.RecId,
+                    strFmt("Last-6 UTR match: %1 (from %2)", last6, utr));
+                return;
+            }
+
+            // Customer receipt carrying the same 6 digits. Three deliberate relaxations,
+            // each of which was on its own enough to make this never match:
+            //
+            // 1. Amount is compared sign-agnostically. A receipt is stored on CustTrans as a
+            //    NEGATIVE AmountCur (it reduces the receivable) while the statement credit is
+            //    positive, so "== _staging.Amount" could not match a receipt at all.
+            // 2. No filter on Closed. Receipts settled against an invoice have Closed set -
+            //    e.g. REC26001057 against INV/26000365 - and settlement says nothing about
+            //    whether the bank line has been reconciled.
+            // 3. PaymReference is searched as well as Voucher and Txt, because the UTR digits
+            //    are keyed there on some receipts and into the description on others:
+            //    "RJ25CA3337 DZIRE|RTGS/NEFT|INV/26000365|699638||Hdfc-3287|REC26001057|..."
+            //
+            // Date is not filtered either: a receipt is often keyed a day or two before the
+            // bank credits it. Amount plus the 6-digit key carry the match.
+            while select custTrans
+                where (custTrans.AmountCur == _staging.Amount
+                    || custTrans.AmountCur == -_staging.Amount)
+                   && (custTrans.Voucher       like last6Pattern
+                    || custTrans.Txt           like last6Pattern
+                    || custTrans.PaymReference like last6Pattern)
+                notexists join claimed
+                    where claimed.MatchedRecId == custTrans.RecId
+                       && claimed.ImportStatus == PremBankStmtStatus::Reconciled
+            {
+                if (PremBankRecMatchingEngine::isReversalPair(custTrans.Txt))
+                {
+                    continue;
+                }
+
+                this.reconcileMatch(_staging, custTrans.RecId,
+                    strFmt("Customer receipt on last-6 %1: %2", last6, custTrans.AccountNum));
+                return;
+            }
+        }
+
+        _staging.markManual(strFmt("UTR %1 (last-6 %2) not found in D365",
+            utr, last6 ? last6 : 'n/a'));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>terminalFromMerchantCode</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Translate a merchant code in a narration ("SE2226") into its terminal id.
+    // </summary>
+    private str terminalFromMerchantCode(str _description)
+    {
+        PremPOSTerminalMap terminalMap;
+        str  upper = strUpr(_description);
+        str  token;
+        int  i, len, ascii;
+
+        if (!_description)
+        {
+            return '';
+        }
+
+        len = strLen(upper);
+
+        for (i = 1; i <= len + 1; i++)
+        {
+            ascii = i <= len ? char2Num(subStr(upper, i, 1), 1) : 0;
+
+            // Merchant codes are letters followed by digits, e.g. SE2226.
+            if ((ascii >= 65 && ascii <= 90) || (ascii >= 48 && ascii <= 57))
+            {
+                token += subStr(upper, i, 1);
+                continue;
+            }
+
+            if (strLen(token) >= 4)
+            {
+                select firstonly terminalMap
+                    where terminalMap.MerchantId == token
+                       && terminalMap.IsActive   == NoYes::Yes;
+
+                if (terminalMap.TerminalId)
+                {
+                    return terminalMap.TerminalId;
+                }
+            }
+
+            token = '';
+        }
+
+        return '';
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchPOSSettlement</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-02: Match a POS settlement credit against the imported settlement file.
+    // </summary>
+    // <remarks>
+    // Two things the earlier version got wrong, each fatal on its own:
+    //
+    // 1. It compared the number pulled out of the narration against PremPOSSettlementStaging
+    //    .BatchNo. The narration carries the TERMINAL number (41959972); BatchNo holds the
+    //    acquirer's batch (915). The two are different fields, so the lookup never hit.
+    //
+    // 2. It expected one staging row to equal the bank credit. The acquirer nets a whole
+    //    day for a terminal into a single credit, while staging holds one row per card
+    //    sale, so the comparison had to be against the SUM for that terminal and date.
+    //
+    // The identifier is therefore tried as a terminal first and as a batch second, and the
+    // day is totalled before comparing. Amount tolerance comes from the parameters.
+    // </remarks>
+    private void matchPOSSettlement(PremBankStmtStaging _staging)
+    {
+        PremPOSSettlementStaging pos, posUpdate;
+        PremBankRecParameters   params = PremBankRecParameters::find();
+        BankAccountID           settlementBank;
+        LedgerJournalId         journalNum;
+        TransDate               txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        AmountCur               tolerance = params.AmountTolerance ? params.AmountTolerance : 1.00;
+        AmountCur               dayTotal;
+        str                     identifier = _staging.ExtractedBatchNo;
+        str                     terminalId, matchedBatch;
+        boolean                 matchedOnTerminal;
+        boolean                 upiSettlement;
+
+        // A UPI settlement names the MERCHANT, not the terminal: "UPI SETTLEMENT -SE2226-
+        // 05/08/26". The terminal map knows which terminal that merchant belongs to, so
+        // the merchant code is translated before giving up.
+        if (!identifier)
+        {
+            identifier = this.terminalFromMerchantCode(_staging.PremDescription);
+        }
+
+        if (!identifier)
+        {
+            _staging.markManual(strFmt(
+                "Could not read a POS terminal, batch or merchant code from '%1'",
+                _staging.PremDescription));
+            this.manualQueued++;
+            return;
+        }
+
+        // The acquirer settles a terminal's whole day in one credit, so total the day.
+        select sum(NetSettlement) from pos
+            where pos.TerminalId      == identifier
+               && pos.SettlementDate  == txnDate
+               && pos.RecordType      == PremPOSRecordType::Sale
+               && pos.Reconciled      == NoYes::No;
+
+        dayTotal = pos.NetSettlement;
+
+        if (dayTotal != 0 && abs(dayTotal - _staging.Amount) <= tolerance)
+        {
+            matchedOnTerminal = true;
+            terminalId        = identifier;
+        }
+        else
+        {
+            // Not a terminal - try it as the acquirer's batch number instead.
+            select sum(NetSettlement) from pos
+                where pos.BatchNo       == identifier
+                   && pos.SettlementDate == txnDate
+                   && pos.RecordType     == PremPOSRecordType::Sale
+                   && pos.Reconciled     == NoYes::No;
+
+            dayTotal = pos.NetSettlement;
+
+            if (dayTotal == 0 || abs(dayTotal - _staging.Amount) > tolerance)
+            {
+                _staging.markManual(strFmt(
+                    "POS %1: no unreconciled settlement rows for %2 add up to %3 (found %4). "
+                    + "Import the settlement file for that day, or check the terminal mapping.",
+                    identifier, txnDate, _staging.Amount, dayTotal));
+                this.manualQueued++;
+                return;
+            }
+
+            matchedBatch = identifier;
+
+            select firstonly pos
+                where pos.BatchNo       == identifier
+                   && pos.SettlementDate == txnDate
+                   && pos.RecordType     == PremPOSRecordType::Sale;
+            terminalId = pos.TerminalId;
+        }
+
+        // A settlement is a transfer between two bank accounts, not a bank-to-GL posting:
+        // the acquirer holds the card money in its own account (PINELCC968 and friends) and
+        // releases it into ours. Offsetting to the POS receivable GL account instead left
+        // the acquirer's balance untouched and never cleared, so the offset is the
+        // terminal's own settlement bank account.
+        settlementBank = PremPOSTerminalMap::getSettlementBankAccount(terminalId);
+
+        // Refuse before creating anything. A journal built on a blank offset account gets
+        // as far as posting and then fails validation, which reads as an unexplained
+        // engine error against the statement line.
+        if (!settlementBank)
+        {
+            _staging.markManual(strFmt(
+                "POS terminal %1 has no settlement bank account in POS terminal mapping. "
+                + "Set it, then reclassify this line.", terminalId));
+            this.manualQueued++;
+            return;
+        }
+
+        // PhonePe, MobiKwik and PayZapp pay out the net and keep MSF + GST. Their whole day
+        // goes into one voucher - bank Dr net, MSF Dr, GST Dr, clearing bank Cr gross - so
+        // the clearing bank is emptied by exactly what the sales put into it. PineLabs keeps
+        // the net transfer below and its MSF journal (processMSFCharges).
+        if (matchedOnTerminal)
+        {
+            select firstonly Provider from pos
+                where pos.TerminalId     == terminalId
+                   && pos.SettlementDate == txnDate
+                   && pos.RecordType     == PremPOSRecordType::Sale
+                   && pos.Reconciled     == NoYes::No;
+
+            upiSettlement = pos.Provider != PremPOSProvider::PineLabs;
+        }
+
+        if (upiSettlement)
+        {
+            journalNum = this.createUPISettlementJournal(
+                _staging,
+                terminalId,
+                txnDate,
+                settlementBank,
+                strFmt("%1 settlement - Terminal %2 - %3", pos.Provider, terminalId, txnDate));
+        }
+        else
+        {
+            journalNum = this.createBankReceiptJournal(
+                _staging,
+                0,
+                strFmt("POS Settlement - Terminal %1 - %2", terminalId, txnDate),
+                settlementBank);
+        }
+
+        if (!journalNum)
+        {
+            _staging.markManual(strFmt("POS %1: settlement journal could not be created", identifier));
+            this.manualQueued++;
+            return;
+        }
+
+        // Every row that made up the total is settled, not just the first one.
+        if (upiSettlement)
+        {
+            // The MSF and GST went into the settlement voucher, so the MSF journal must not
+            // raise them again.
+            update_recordset posUpdate
+                setting Reconciled           = NoYes::Yes,
+                        ReconciledStagingId  = _staging.RecId,
+                        SettlementJournalNum = journalNum,
+                        MSFPosted            = NoYes::Yes,
+                        MSFJournalNum        = journalNum
+                where posUpdate.TerminalId     == terminalId
+                   && posUpdate.SettlementDate == txnDate
+                   && posUpdate.RecordType     == PremPOSRecordType::Sale
+                   && posUpdate.Reconciled     == NoYes::No;
+        }
+        else if (matchedOnTerminal)
+        {
+            update_recordset posUpdate
+                setting Reconciled           = NoYes::Yes,
+                        ReconciledStagingId  = _staging.RecId,
+                        SettlementJournalNum = journalNum
+                where posUpdate.TerminalId     == terminalId
+                   && posUpdate.SettlementDate == txnDate
+                   && posUpdate.RecordType     == PremPOSRecordType::Sale
+                   && posUpdate.Reconciled     == NoYes::No;
+        }
+        else
+        {
+            update_recordset posUpdate
+                setting Reconciled           = NoYes::Yes,
+                        ReconciledStagingId  = _staging.RecId,
+                        SettlementJournalNum = journalNum
+                where posUpdate.BatchNo        == matchedBatch
+                   && posUpdate.SettlementDate == txnDate
+                   && posUpdate.RecordType     == PremPOSRecordType::Sale
+                   && posUpdate.Reconciled     == NoYes::No;
+        }
+
+        _staging.MatchedRefId      = terminalId;
+        _staging.MatchedJournalNum = journalNum;
+        _staging.MappingType       = PremMappingType::POSTOBANKMAPPING;
+        _staging.markReconciled(0, strFmt("POS settlement matched: terminal %1, %2 totalling %3",
+            terminalId, txnDate, dayTotal));
+        this.autoPosted++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchIssuedCheque</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-03: Match issued cheque against vendor/customer payment.
+    // </summary>
+    // <remarks>
+    // The cheque number is looked for in four places, cheapest first. Exact equality on
+    // PaymReference/PaymId alone was too strict: real payments carry the number only
+    // inside the narration ("Being Chq No. 025995 Dated - 29/06/2026") and leave the
+    // dedicated cheque column at zero, so those five-a-day cheque lines always fell
+    // through to the manual queue.
+    // </remarks>
+    private void matchIssuedCheque(PremBankStmtStaging _staging)
+    {
+        LedgerJournalTrans vendJrnl;
+        VendTrans          vendTrans;
+        LedgerJournalTrans custJrnl;
+        CustTrans          custTrans;
+        BankAccountTrans   bankTrans;
+        PremBankStmtStaging claimed;
+        str chequeNo    = _staging.ExtractedCheque;
+        str chequePattern;
+        str trimmedNo;
+        PremBankRecParameters params = PremBankRecParameters::find(_staging.BankAccountId);
+        boolean allowSettled = params.MatchSettledPayments == NoYes::Yes;
+
+        if (!chequeNo)
+        {
+            _staging.markManual("No cheque number found in description/reference");
+            this.manualQueued++;
+            return;
+        }
+
+        // "025995" and "25995" are the same cheque; match on the significant digits.
+        trimmedNo = PremBankRecHelper::stripLeadingZeros(chequeNo);
+        chequePattern = '*' + trimmedNo + '*';
+
+        // 1. The bank transaction's own cheque number, when the payment filled it in.
+        // Some statements pad the cheque number out to twelve digits ("000000000176"),
+        // so the padded and the significant form both have to be tried.
+        select firstonly bankTrans
+            where bankTrans.AccountID  == _staging.BankAccountId
+               && (bankTrans.ChequeNum == chequeNo
+                || bankTrans.ChequeNum == trimmedNo)
+               && bankTrans.Reconciled == NoYes::No
+            notexists join claimed
+                where claimed.MatchedRecId == bankTrans.RecId
+                   && claimed.ImportStatus == PremBankStmtStatus::Reconciled;
+
+        if (bankTrans.RecId)
+        {
+            this.reconcileMatch(_staging, bankTrans.RecId,
+                strFmt("Cheque matched on bank transaction: %1", chequeNo));
+            return;
+        }
+
+        // 2. Vendor payment journal - reference fields, then the narration.
+        select firstonly vendJrnl
+            where vendJrnl.PaymReference == chequeNo
+               || vendJrnl.PaymId        == chequeNo;
+
+        if (!vendJrnl.RecId)
+        {
+            select firstonly vendJrnl
+                where vendJrnl.Txt like chequePattern;
+        }
+
+        if (vendJrnl.RecId)
+        {
+            while select vendTrans
+                where vendTrans.Voucher == vendJrnl.Voucher
+                   && (vendTrans.AmountCur == _staging.Amount
+                    || vendTrans.AmountCur == -_staging.Amount)
+            {
+                if (!allowSettled && vendTrans.Closed != dateNull())
+                {
+                    continue;
+                }
+
+                this.reconcileMatch(_staging, vendTrans.RecId,
+                    strFmt("Vendor cheque match: %1 - %2", chequeNo, vendTrans.AccountNum));
+                this.writeBackBankReference(_staging, vendTrans.Voucher);
+                return;
+            }
+        }
+
+        // 3. Customer refund cheque - same two steps.
+        select firstonly custJrnl
+            where custJrnl.PaymReference == chequeNo;
+
+        if (!custJrnl.RecId)
+        {
+            select firstonly custJrnl
+                where custJrnl.Txt like chequePattern;
+        }
+
+        if (custJrnl.RecId)
+        {
+            while select custTrans
+                where custTrans.Voucher == custJrnl.Voucher
+                   && (custTrans.AmountCur == _staging.Amount
+                    || custTrans.AmountCur == -_staging.Amount)
+            {
+                if (!allowSettled && custTrans.Closed != dateNull())
+                {
+                    continue;
+                }
+
+                this.reconcileMatch(_staging, custTrans.RecId,
+                    strFmt("Customer refund cheque match: %1", chequeNo));
+                this.writeBackBankReference(_staging, custTrans.Voucher);
+                return;
+            }
+        }
+
+        _staging.markManual(strFmt("Cheque %1 not found in vendor/customer payments", chequeNo));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchCashDeposit</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-04: Match cash deposit by amount + date + branch keyword.
+    // </summary>
+    private void matchCashDeposit(PremBankStmtStaging _staging)
+    {
+        PremBranchName branch = PremBankRecHelper::extractBranchFromCashDesc(_staging.PremDescription);
+        TransDate txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        LedgerJournalTrans jrnlTrans;
+        LedgerJournalTable jrnlTable;
+        PremBankRecParameters params = PremBankRecParameters::find();
+
+        while select jrnlTrans
+    join jrnlTable
+    where jrnlTable.JournalNum == jrnlTrans.JournalNum
+       && jrnlTable.JournalName == params.BankJournalName
+               && jrnlTable.Posted         == NoYes::Yes
+               && jrnlTrans.AmountCurDebit == _staging.Amount
+               && jrnlTrans.TransDate      == txnDate
+        {
+            if (branch && strScan(strUpr(jrnlTrans.Txt), strUpr(branch), 1, strLen(jrnlTrans.Txt)) > 0)
+            {
+                this.reconcileMatch(_staging, jrnlTrans.RecId,
+                    strFmt("Cash deposit matched: Branch=%1, Amt=%2", branch, _staging.Amount));
+                return;
+            }
+
+            if (!branch)
+            {
+                this.reconcileMatch(_staging, jrnlTrans.RecId,
+                    strFmt("Cash deposit matched by amount+date: %1", _staging.Amount));
+                return;
+            }
+        }
+
+        // Branch-wise only (finance remark on the Apr-Jul 2026 statements). There used to be
+        // a fallback here that took ANY same-amount, same-day cash entry when the branch in
+        // the narration did not match - which reconciled one branch's deposit against
+        // another branch's entry. An unmatched branch now goes to the manual queue instead.
+
+        _staging.markManual(strFmt(
+            "Cash deposit %1 from branch %2 - no entry for that branch on that day",
+            _staging.Amount, branch));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchChequeDeposit</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-05: Match cheque deposit by reference / last-6 digits.
+    // </summary>
+    private void matchChequeDeposit(PremBankStmtStaging _staging)
+    {
+        str chequeRef = _staging.ReferenceNo;
+        str chequeRef6 = PremBankRecHelper::extractLast6(chequeRef);
+        CustTrans custTrans;
+        LedgerJournalTrans jrnlTrans;
+
+        select firstonly jrnlTrans
+            where jrnlTrans.PaymReference == chequeRef;
+
+        if (!jrnlTrans.RecId && chequeRef6)
+        {
+            while select jrnlTrans
+                where jrnlTrans.AmountCurDebit == _staging.Amount
+                   || jrnlTrans.AmountCurCredit == _staging.Amount
+            {
+                if (PremBankRecHelper::extractLast6(jrnlTrans.PaymReference) == chequeRef6)
+                {
+                    break;
+                }
+            }
+        }
+
+        if (jrnlTrans.RecId)
+        {
+            select firstonly custTrans
+                where custTrans.Voucher   == jrnlTrans.Voucher
+                   && custTrans.AmountCur == _staging.Amount
+                   && custTrans.Closed    == dateNull();
+
+            if (custTrans.RecId)
+            {
+                this.reconcileMatch(_staging, custTrans.RecId,
+                    strFmt("Cheque deposit matched: %1 - %2", chequeRef, custTrans.AccountNum));
+                return;
+            }
+        }
+
+        _staging.markManual(strFmt("Cheque deposit ref %1 not matched", chequeRef));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchByVendorCode</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Match an outgoing payment on the vendor account code carried in the narration.
+    // </summary>
+    // <remarks>
+    // The remittance remark sent with the NEFT comes back on the statement as one of the
+    // dash-separated segments:
+    //
+    //     NEFT  - IDIB000O504 - VEN014219 - 50353729256 - TTA PRINT CARE
+    //
+    // That is the exact VendTable.AccountNum, which makes this the only leg of the
+    // outgoing match that does not have to guess the vendor from free text. Amount is
+    // compared without regard to sign because a vendor payment is stored on VendTrans as
+    // a positive AmountCur while the statement debit is positive too.
+    //
+    // A second candidate for the same vendor, amount and date cannot be told apart, so
+    // the line is sent to the manual queue rather than matched to an arbitrary one.
+    // </remarks>
+    private boolean matchByVendorCode(
+        PremBankStmtStaging _staging,
+        str                 _vendorCode,
+        boolean             _allowSettled)
+    {
+        VendTrans vendTrans;
+        VendTrans candidate;
+        TransDate txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        int       found   = 0;
+
+        if (!_vendorCode)
+        {
+            return false;
+        }
+
+        while select vendTrans
+            where vendTrans.AccountNum == _vendorCode
+               && (vendTrans.AmountCur == _staging.Amount
+                || vendTrans.AmountCur == -_staging.Amount)
+               && vendTrans.TransDate  == txnDate
+        {
+            if (!_allowSettled && vendTrans.Closed != dateNull())
+            {
+                continue;
+            }
+
+            found++;
+            candidate.data(vendTrans);
+
+            if (found > 1)
+            {
+                break;
+            }
+        }
+
+        if (found == 1)
+        {
+            this.reconcileMatch(_staging, candidate.RecId,
+                strFmt("Vendor code match: %1 (voucher %2)", _vendorCode, candidate.Voucher));
+            this.writeBackBankReference(_staging, candidate.Voucher);
+            return true;
+        }
+
+        if (found > 1)
+        {
+            PremBankRecAuditLog::logEvent(_staging.RecId, "VENDORCODE_AMBIGUOUS",
+                strFmt("%1 has more than one payment of %2 on %3 - sent to manual review",
+                    _vendorCode, _staging.absAmount(), txnDate));
+        }
+
+        return false;
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>writeBackBankReference</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Write the bank's own reference - the UTR for a transfer, the cheque number for a
+    // cheque - onto the attachment of the voucher this line matched.
+    // </summary>
+    // <remarks>
+    // The reference does not exist when the journal is entered: the bank generates it
+    // when the payment goes out, so the statement is the only place it can come from.
+    // Writing it back closes the loop, and a later query on the voucher shows which bank
+    // line cleared it.
+    //
+    // Only an attachment that already exists is updated. Creating documents against a
+    // posted voucher needs its own document type configuration, so when there is no
+    // attachment the reference is recorded in the audit log instead and the match still
+    // stands - the write-back is a convenience, never a condition of reconciling.
+    // </remarks>
+    private void writeBackBankReference(PremBankStmtStaging _staging, str _voucher)
+    {
+        PremBankRecParameters params = PremBankRecParameters::find(_staging.BankAccountId);
+        LedgerJournalTrans journalTrans;
+        DocuRef            docuRef;
+        str                reference;
+        str                stamp;
+        int                updated = 0;
+
+        if (params.WriteBackBankRefToAttachment != NoYes::Yes || !_voucher)
+        {
+            return;
+        }
+
+        // The UTR for a transfer, the cheque number for a cheque, and the statement's own
+        // reference column when the narration carried neither.
+        reference = _staging.ExtractedUTR;
+
+        if (!reference)
+        {
+            reference = _staging.ExtractedCheque;
+        }
+
+        if (!reference)
+        {
+            reference = _staging.ReferenceNo;
+        }
+
+        if (!reference)
+        {
+            return;
+        }
+
+        stamp = strFmt("Bank ref: %1 | %2 | %3 %4",
+            reference,
+            DateTimeUtil::date(_staging.TxnDateTime),
+            _staging.BankAccountId,
+            _staging.LineReference);
+
+        ttsbegin;
+
+        // Attachments hang off the journal LINE, and a payment journal can have the
+        // vendor on one line and the bank on another, so every line of the voucher is
+        // considered.
+        while select RecId from journalTrans
+            where journalTrans.Voucher == _voucher
+        {
+            while select forupdate docuRef
+                where docuRef.RefTableId  == tableNum(LedgerJournalTrans)
+                   && docuRef.RefRecId    == journalTrans.RecId
+                   && docuRef.RefCompanyId == curExt()
+            {
+                // Idempotent: re-running the match must not stack the same line up again.
+                if (strScan(docuRef.Notes, reference, 1, strLen(docuRef.Notes)) > 0)
+                {
+                    continue;
+                }
+
+                docuRef.Notes = docuRef.Notes
+                              ? docuRef.Notes + num2char(10) + stamp
+                              : stamp;
+                docuRef.update();
+                updated++;
+            }
+        }
+
+        ttscommit;
+
+        PremBankRecAuditLog::logEvent(
+            _staging.RecId,
+            updated ? "ATTACHMENT_STAMPED" : "ATTACHMENT_MISSING",
+            updated
+                ? strFmt("Voucher %1 | %2 attachment(s) stamped | %3", _voucher, updated, stamp)
+                : strFmt("Voucher %1 has no attachment to stamp | %2", _voucher, stamp));
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findCustByReference</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Candidate customer transactions for a narration reference: how many there are and
+    // which one, returned as [count, RecId, Voucher].
+    // </summary>
+    // <remarks>
+    // The reference is looked for in the fields a reference actually lands in - the
+    // voucher, the line text and the payment reference - and the account number is tried
+    // too, in case the number is the customer rather than the document. Amount is
+    // compared without regard to sign, because a refund and a receipt sit on opposite
+    // sides of CustTrans and the statement amount is unsigned either way.
+    // </remarks>
+    private container findCustByReference(
+        PremBankStmtStaging _staging,
+        str                 _reference,
+        str                 _key,
+        boolean             _useDate,
+        boolean             _allowSettled)
+    {
+        CustTrans custTrans;
+        CustTrans candidate;
+        TransDate txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        str       pattern = '*' + _key + '*';
+        int       found   = 0;
+
+        while select custTrans
+            where (custTrans.AmountCur == _staging.Amount
+                || custTrans.AmountCur == -_staging.Amount)
+               && (custTrans.AccountNum    == _reference
+                || custTrans.AccountNum    == _key
+                || custTrans.Voucher       like pattern
+                || custTrans.Txt           like pattern
+                || custTrans.PaymReference like pattern)
+        {
+            if (_useDate && custTrans.TransDate != txnDate)
+            {
+                continue;
+            }
+
+            if (!_allowSettled && custTrans.Closed != dateNull())
+            {
+                continue;
+            }
+
+            found++;
+            candidate.data(custTrans);
+
+            // Two candidates is already too many to choose between.
+            if (found > 1)
+            {
+                break;
+            }
+        }
+
+        return [found, candidate.RecId, candidate.Voucher];
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchByCustomerReference</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-07 / customer refund: match on the reference the bank echoed back.
+    // </summary>
+    // <remarks>
+    // A customer refund carries a reference of ours in the remittance remark -
+    // "NEXAJSAL-2670697206" - where a vendor payment carries the vendor code. The
+    // location part is not a key, so the match is made on the digits.
+    //
+    // The statement date is tried first and the reference alone second: a refund is
+    // often keyed a day or two before the bank sends it, which is the same relaxation
+    // matchUTRToUTR makes. Where more than one entry fits, the line goes to the manual
+    // queue rather than being matched to an arbitrary one.
+    // </remarks>
+    private boolean matchByCustomerReference(
+        PremBankStmtStaging _staging,
+        str                 _reference,
+        boolean             _allowSettled)
+    {
+        str       key = PremBankRecHelper::longestDigitRun(_reference);
+        container result;
+        int       found;
+        RefRecId  recId;
+        str       voucher;
+
+        // Fewer than four digits is not a reference, it is a coincidence.
+        if (strLen(key) < 4)
+        {
+            return false;
+        }
+
+        result = this.findCustByReference(_staging, _reference, key, true, _allowSettled);
+        [found, recId, voucher] = result;
+
+        if (found == 0)
+        {
+            result = this.findCustByReference(_staging, _reference, key, false, _allowSettled);
+            [found, recId, voucher] = result;
+        }
+
+        if (found == 1)
+        {
+            this.reconcileMatch(_staging, recId,
+                strFmt("Customer reference match: %1 (voucher %2)", _reference, voucher));
+            this.writeBackBankReference(_staging, voucher);
+            return true;
+        }
+
+        if (found > 1)
+        {
+            PremBankRecAuditLog::logEvent(_staging.RecId, "CUSTREF_AMBIGUOUS",
+                strFmt("Reference %1 matches more than one entry of %2 - sent to manual review",
+                    _reference, _staging.absAmount()));
+        }
+
+        return false;
+    }
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchOutgoingNEFT</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-07: Match outgoing NEFT/RTGS by beneficiary name + amount + date.
+    // </summary>
+    private void matchOutgoingNEFT(PremBankStmtStaging _staging)
+    {
+        str beneName = _staging.ExtractedBeneficiary;
+        TransDate txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+        VendTrans vendTrans;
+        VendTable vendTable;
+        CustTrans custTrans;
+        CustTable custTable;
+        str beneUpper;
+        str vendorCode = _staging.ExtractedVendorCode;
+        str partyRef   = _staging.ExtractedPartyRef;
+        PremBankRecParameters params = PremBankRecParameters::find(_staging.BankAccountId);
+        boolean allowSettled = params.MatchSettledPayments == NoYes::Yes;
+        boolean byPartyRef   = params.MatchByVendorCode    == NoYes::Yes;
+
+        // The remark the bank echoed back is exact, so it is tried first and a line that
+        // carries one does not need a beneficiary name at all. A vendor payment puts the
+        // vendor account code there; a customer refund puts a reference of ours.
+        if (byPartyRef)
+        {
+            if (vendorCode && this.matchByVendorCode(_staging, vendorCode, allowSettled))
+            {
+                return;
+            }
+
+            if (!vendorCode
+             && PremBankRecHelper::isStructuredReference(partyRef)
+             && this.matchByCustomerReference(_staging, partyRef, allowSettled))
+            {
+                return;
+            }
+        }
+
+        if (!beneName)
+        {
+            _staging.markManual(vendorCode || partyRef
+                ? strFmt("Remittance remark '%1' in the narration, but no entry of %2 on %3 to match",
+                         vendorCode ? vendorCode : partyRef, _staging.absAmount(), txnDate)
+                : "Cannot extract beneficiary name");
+            this.manualQueued++;
+            return;
+        }
+
+        beneUpper = strUpr(beneName);
+
+        // The amount is compared without regard to sign and settlement is not filtered
+        // out - the same two relaxations matchUTRToUTR documents. A vendor payment is
+        // stored on VendTrans as a POSITIVE AmountCur while the statement debit is also
+        // positive, so "== -_staging.Amount" was looking for an invoice, not a payment.
+        while select vendTrans
+            join vendTable
+            where vendTable.AccountNum == vendTrans.AccountNum
+               && (vendTrans.AmountCur == _staging.Amount
+                || vendTrans.AmountCur == -_staging.Amount)
+               && vendTrans.TransDate  == txnDate
+        {
+            if (!allowSettled && vendTrans.Closed != dateNull())
+            {
+                continue;
+            }
+
+            if (strScan(strUpr(vendTable.name()), beneUpper, 1, strLen(vendTable.name())) > 0)
+            {
+                this.reconcileMatch(_staging, vendTrans.RecId,
+                    strFmt("Vendor NEFT match: %1 - %2", vendTrans.AccountNum, beneName));
+                this.writeBackBankReference(_staging, vendTrans.Voucher);
+                return;
+            }
+        }
+
+        while select custTrans
+            join custTable
+            where custTable.AccountNum == custTrans.AccountNum
+               && (custTrans.AmountCur == _staging.Amount
+                || custTrans.AmountCur == -_staging.Amount)
+               && custTrans.TransDate  == txnDate
+        {
+            if (!allowSettled && custTrans.Closed != dateNull())
+            {
+                continue;
+            }
+
+            if (strScan(strUpr(custTable.name()), beneUpper, 1, strLen(custTable.name())) > 0)
+            {
+                this.reconcileMatch(_staging, custTrans.RecId,
+                    strFmt("Customer refund match: %1 - %2", custTrans.AccountNum, beneName));
+                this.writeBackBankReference(_staging, custTrans.Voucher);
+                return;
+            }
+        }
+
+        _staging.markManual(strFmt("Outgoing NEFT to %1 (Amt: %2) not matched",
+            beneName, _staging.Amount));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchBankToBank</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-06: Detect self-transfer via IFSC mapping; auto-create clearing journal if no
+    // matching credit is found on the destination account.
+    // </summary>
+    private void matchBankToBank(PremBankStmtStaging _staging)
+    {
+        str ifsc = _staging.ExtractedIFSC;
+        BankAccountID destAccount;
+        TransDate txnDate;
+        BankAccountTrans destTrans;
+        LedgerJournalId journalNum;
+
+        // An own-account transfer names the other side by ACCOUNT NUMBER, not by IFSC:
+        // "A2AOWN01 - C46728040826190956 -  - 50200029378770 - PREM MOTORS". Reading the
+        // account number out of the narration is therefore tried first; the IFSC map is
+        // only a fallback, and the IFSC in an inbound RTGS line belongs to the SENDER's
+        // bank anyway, so it is not ours to map.
+        destAccount = PremBankRecHelper::ownAccountFromNarration(
+            _staging.PremDescription, _staging.BankAccountId);
+
+        if (!destAccount && ifsc)
+        {
+            destAccount = PremBankIFSCMap::findBankByIFSC(ifsc);
+        }
+
+        if (!destAccount)
+        {
+            // A loan or working-capital drawdown is not a transfer between our accounts.
+            // It has no counter-account to find, so say that instead of blaming the IFSC.
+            if (PremBankRecHelper::isLoanDisbursement(_staging.PremDescription))
+            {
+                _staging.markManual(strFmt(
+                    "Loan / WCDL disbursement of %1 - post the drawdown against the loan account. "
+                    + "No counter bank account exists for this line.", _staging.Amount));
+                this.manualQueued++;
+                return;
+            }
+
+            // Nothing of ours on the other side, so this was never a self transfer. A
+            // credit gets a second chance through the ordinary UTR route rather than
+            // dead-ending here - which is what happened to genuine customer receipts whose
+            // narration merely carried our own name on both sides.
+            if (_staging.isCredit())
+            {
+                PremBankRecAuditLog::logEvent(_staging.RecId, "B2B_RECLASSIFIED",
+                    strFmt("No own account found for '%1' - retried as a UTR credit",
+                        _staging.PremDescription));
+
+                this.matchUTRToUTR(_staging);
+                return;
+            }
+
+            _staging.markManual(strFmt(
+                "Transfer of %1 could not be tied to another of our bank accounts. "
+                + "Narration carries no account number we own%2.",
+                _staging.Amount,
+                ifsc ? strFmt(" and IFSC %1 is not one of ours", ifsc) : ''));
+            this.manualQueued++;
+            return;
+        }
+
+        txnDate = DateTimeUtil::date(_staging.TxnDateTime);
+
+        select firstonly destTrans
+            where destTrans.AccountID  == destAccount
+               && destTrans.AmountCur  == _staging.Amount
+               && destTrans.Reconciled == NoYes::No
+               && destTrans.TransDate  >= txnDate
+               && destTrans.TransDate  <= txnDate + 1;
+
+        if (destTrans.RecId)
+        {
+            this.reconcileMatch(_staging, destTrans.RecId,
+                strFmt("Bank-to-bank: %1 -> %2 via %3",
+                    _staging.BankAccountId, destAccount, ifsc));
+
+            destTrans.selectForUpdate(true);
+            destTrans.Reconciled = NoYes::Yes;
+            destTrans.update();
+
+            _staging.MappingType = PremMappingType::BANKTOBANKMAPPING;
+            return;
+        }
+
+        journalNum = this.createInterBankJournal(_staging, destAccount, ifsc);
+        if (journalNum)
+        {
+            _staging.MatchedJournalNum = journalNum;
+            _staging.MappingType       = PremMappingType::BANKTOBANKMAPPING;
+            _staging.markReconciled(0,
+                strFmt("Inter-bank clearing journal created: %1", journalNum));
+            this.autoPosted++;
+            return;
+        }
+
+        _staging.markManual(strFmt("Bank-to-bank to IFSC %1 - destination not found", ifsc));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>matchNEFTReturn</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-08: Reverse original outgoing NEFT entry by matching UTR.
+    // </summary>
+    private void matchNEFTReturn(PremBankStmtStaging _staging)
+    {
+        PremBankStmtStaging origStaging;
+        LedgerJournalId reversalJournal;
+        str origUTR = _staging.ReferenceNo;
+        str origLast6, origLast6Pattern;
+        boolean alreadyActive;
+
+        if (!origUTR)
+        {
+            _staging.markManual("NEFT Return - cannot identify original UTR");
+            this.manualQueued++;
+            return;
+        }
+
+        // Match the original outgoing payment on the last 6 digits, for the same reason as
+        // matchUTRToUTR: the return narration rarely repeats the UTR character for
+        // character, but the trailing sequence survives. Amount plus Debit direction keep
+        // the 6-digit key from matching an unrelated line.
+        origLast6 = PremBankRecHelper::extractLast6(origUTR);
+
+        // '*<none>*' can never match, which is what we want when there are too few digits
+        // to form a key - the exact-UTR half of the predicate still applies.
+        origLast6Pattern = origLast6 ? '*' + origLast6 + '*' : '*<none>*';
+
+        select firstonly origStaging
+            where origStaging.BankAccountId   == _staging.BankAccountId
+               && origStaging.Amount          == _staging.Amount
+               && origStaging.CreditDebitFlag == PremCDFlag::Debit
+               && origStaging.RecId           != _staging.RecId
+               && (origStaging.ReferenceNo == origUTR
+                || origStaging.ReferenceNo like origLast6Pattern);
+
+        if (origStaging.RecId)
+        {
+            reversalJournal = this.createReversalJournal(
+                origStaging,
+                strFmt("NEFT Return - Reversal of UTR %1", origUTR));
+
+            if (reversalJournal)
+            {
+                _staging.MatchedRefId      = origUTR;
+                _staging.MatchedJournalNum = reversalJournal;
+                _staging.markReconciled(origStaging.RecId,
+                    strFmt("NEFT Return - Original UTR %1 reversed", origUTR));
+                this.autoPosted++;
+                return;
+            }
+        }
+
+        alreadyActive = _staging.AlertFlag == NoYes::Yes;
+
+        _staging.markManual(strFmt("NEFT Return - Original UTR %1 not found", origUTR));
+        _staging.AlertFlag = NoYes::Yes;
+        this.manualQueued++;
+        this.sendWorkflowAlert(_staging, "NEFT Return - Manual Action Required");
+
+        if (!alreadyActive)
+        {
+            Workflow::activateFromWorkflowType(
+                'PremNEFTReturnApprovalTemplate',
+                _staging.RecId,
+                strFmt("NEFT return - UTR %1 not found, Amt %2", origUTR, _staging.Amount),
+                NoYes::No);
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>handleChequeReturn</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-09: Cheque return - cannot auto-reconcile, flag and alert.
+    // </summary>
+    private void handleChequeReturn(PremBankStmtStaging _staging)
+    {
+        boolean alreadyActive = _staging.AlertFlag == NoYes::Yes;
+        PremBankStmtStaging original = this.findReturnedEntry(_staging);
+        str corresponding = original.RecId
+            ? strFmt("Corresponding entry: %1 on %2, ref %3, amount %4. ",
+                original.PremDescription,
+                DateTimeUtil::date(original.TxnDateTime),
+                original.ReferenceNo,
+                original.Amount)
+            : "No corresponding entry found with the same reference and amount. ";
+
+        if (original.RecId)
+        {
+            _staging.MatchedRefId = int642Str(original.RecId);
+        }
+
+        _staging.AlertFlag = NoYes::Yes;
+        _staging.markManual(strFmt(
+            "CHEQUE RETURN. Ref: %1 | Amount: %2. %3" +
+            "Action required: (1) Contact HDFC for return memo, " +
+            "(2) Reverse the corresponding entry, (3) Mark cheque dishonoured",
+            _staging.ReferenceNo,
+            _staging.Amount,
+            corresponding));
+
+        this.sendWorkflowAlert(_staging,
+            strFmt("URGENT: Cheque Return Received - Ref %1, Amt %2",
+                _staging.ReferenceNo, _staging.Amount));
+
+        if (!alreadyActive)
+        {
+            // Check for a configuration first rather than calling and catching. A workflow
+            // CONFIGURATION has to be created in the UI before a template can be activated;
+            // having the template in metadata is not enough. activateFromWorkflowType does
+            // not throw when it is missing - it writes a red error straight to the infolog,
+            // so a try/catch cannot suppress it and every cheque return produced noise on
+            // an otherwise clean run. The approval is optional; the line is already queued
+            // for manual review above, so skipping it loses nothing.
+            if (PremBankRecMatchingEngine::workflowIsConfigured('PremChequeReturnApprovalTemplate'))
+            {
+                Workflow::activateFromWorkflowType(
+                    'PremChequeReturnApprovalTemplate',
+                    _staging.RecId,
+                    strFmt("Cheque return - Ref %1, Amt %2", _staging.ReferenceNo, _staging.Amount),
+                    NoYes::No);
+            }
+            else
+            {
+                PremBankRecAuditLog::logEvent(
+                    _staging.RecId,
+                    "WORKFLOW_NOT_CONFIGURED",
+                    strFmt("Cheque return approval skipped for ref %1 - no enabled workflow "
+                        + "configuration for PremChequeReturnApprovalTemplate",
+                        _staging.ReferenceNo));
+            }
+        }
+
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>findInsuranceMapping</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Find the insurer whose keyword appears in the narration.
+    // </summary>
+    // <remarks>
+    // Longest keyword wins, and a row naming this bank account outranks a blank one, so a
+    // narration carrying "HDFC ERGO" is not claimed by a plain "HDFC" row. Scope and
+    // validity are filtered in X++, not in the where clause: an expression that fails to
+    // translate to SQL there returns nothing and says nothing.
+    // </remarks>
+    // Returns the RecId of the winning row, not the buffer. A table buffer returned from
+    // a method that filled it inside a while-select came back empty at the caller even
+    // though the loop had plainly assigned it - the trace showed "ICICI LOMBARD: MATCH"
+    // and the caller still saw RecId 0. Handing back a number and re-reading the row
+    // removes every buffer-lifetime question from the path.
+    private RefRecId findInsuranceMapping(str _description, BankAccountID _bankAccountId)
+    {
+        PremInsuranceCustomerMap map;
+        RefRecId bestRecId;
+        str     descUpper = strUpr(_description);
+        str     keyword, nameUpper;
+        int     bestLen;
+        boolean rowIsForAccount, bestIsForAccount, matched;
+        date    today = DateTimeUtil::date(DateTimeUtil::utcNow());
+
+        if (!_description)
+        {
+            return 0;
+        }
+
+        this.insuranceTrace = '';
+
+        while select map
+            where map.IsActive == NoYes::Yes
+        {
+            keyword = strUpr(strLRTrim(map.MatchKeyword));
+
+            if (_bankAccountId
+                && map.BankAccountId
+                && map.BankAccountId != _bankAccountId)
+            {
+                this.insuranceTrace += strFmt(' | %1: wrong account (%2)', keyword, map.BankAccountId);
+                continue;
+            }
+
+            if (!keyword)
+            {
+                this.insuranceTrace += ' | (blank keyword)';
+                continue;
+            }
+
+            if (map.ValidFrom && today < map.ValidFrom)
+            {
+                this.insuranceTrace += strFmt(' | %1: starts %2, today %3', keyword, map.ValidFrom, today);
+                continue;
+            }
+
+            if (map.ValidTo && today > map.ValidTo)
+            {
+                this.insuranceTrace += strFmt(' | %1: ended %2, today %3', keyword, map.ValidTo, today);
+                continue;
+            }
+
+            // The keyword is the intended match, but the insurer's own name is tried as
+            // well: rows are often filled in with the full name and a keyword that does
+            // not quite mirror the bank's wording, and the name is right there on the row.
+            matched = strScan(descUpper, keyword, 1, strLen(descUpper)) > 0;
+
+            if (!matched)
+            {
+                nameUpper = strUpr(strLRTrim(map.InsuranceName));
+
+                if (nameUpper && strScan(descUpper, nameUpper, 1, strLen(descUpper)) > 0)
+                {
+                    matched = true;
+                    keyword = nameUpper;
+                }
+            }
+
+            if (!matched)
+            {
+                this.insuranceTrace += strFmt(' | %1: not in text (kw len %2, desc len %3)',
+                    keyword, strLen(keyword), strLen(descUpper));
+                continue;
+            }
+
+            this.insuranceTrace += strFmt(' | %1: MATCH', keyword);
+
+            rowIsForAccount = (map.BankAccountId != '');
+
+            if (!bestRecId
+                || (rowIsForAccount && !bestIsForAccount)
+                || (rowIsForAccount == bestIsForAccount && strLen(keyword) > bestLen))
+            {
+                bestRecId        = map.RecId;
+                bestLen          = strLen(keyword);
+                bestIsForAccount = rowIsForAccount;
+            }
+        }
+
+        return bestRecId;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeInsuranceReceipt</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-10: Route insurance receipt to customer account.
+    // </summary>
+    private void routeInsuranceReceipt(PremBankStmtStaging _staging)
+    {
+        PremInsuranceCustomerMap insMap, mapRow;
+        CustTrans custTrans;
+        LedgerJournalId journalNum;
+        RefRecId insMapRecId;
+        int activeRows;
+        str keywordList;
+
+        // Matched here rather than through PremInsuranceCustomerMap::findByKeyword. The
+        // table's method kept returning nothing while this class could read the very same
+        // rows and print their keywords - the table's X++ is not being recompiled with the
+        // rest of the model, so its old body stays in force however the source reads.
+        // Keeping the logic in the engine removes that dependency entirely.
+        insMapRecId = this.findInsuranceMapping(_staging.PremDescription, _staging.BankAccountId);
+
+        if (insMapRecId)
+        {
+            select firstonly insMap
+                where insMap.RecId == insMapRecId;
+        }
+
+        if (!insMap.RecId)
+        {
+            // Name the keywords that were on offer. "No mapping matched" on its own sent us
+            // hunting through the table, the company, the validity dates and the build -
+            // when the answer is always visible in the keywords themselves.
+            while select mapRow
+                where mapRow.IsActive == NoYes::Yes
+            {
+                activeRows++;
+                keywordList += (keywordList ? ', ' : '') + mapRow.MatchKeyword;
+            }
+
+            _staging.markManual(strFmt(
+                "Insurance receipt - no mapping matched. Checked %1 row(s)%2. Account %3. Description: %4",
+                activeRows,
+                this.insuranceTrace ? this.insuranceTrace : ' | (no rows examined)',
+                _staging.BankAccountId, _staging.PremDescription));
+            this.manualQueued++;
+            return;
+        }
+
+        select firstonly custTrans
+            where custTrans.AccountNum == insMap.CustAccount
+               && custTrans.AmountCur  == _staging.Amount
+               && custTrans.Closed     == dateNull();
+
+        if (custTrans.RecId)
+        {
+            this.reconcileMatch(_staging, custTrans.RecId,
+                strFmt("Insurance receipt matched: %1 - %2",
+                    insMap.InsuranceName, insMap.CustAccount));
+            _staging.MappingType = PremMappingType::BANKTOINSMAPPING;
+            return;
+        }
+
+        journalNum = this.createCustomerPaymentJournal(
+            _staging,
+            insMap.CustAccount,
+            insMap.LedgerAccount,
+            strFmt("Insurance Receipt - %1", insMap.InsuranceName));
+
+        if (journalNum)
+        {
+            _staging.MatchedJournalNum = journalNum;
+            _staging.MappingType       = PremMappingType::BANKTOINSMAPPING;
+            _staging.markReconciled(0,
+                strFmt("Insurance payment journal created: %1", journalNum));
+            this.autoPosted++;
+            return;
+        }
+
+        _staging.markManual(strFmt("Insurance receipt routing failed: %1",
+            insMap.InsuranceName));
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeSettlementCharges</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-13: Route bank settlement charges to the configured expense GL account.
+    // </summary>
+    private void routeSettlementCharges(PremBankStmtStaging _staging)
+    {
+        LedgerDimensionAccount chargesLedger;
+        LedgerJournalId journalNum;
+
+        // Bank charges mapped to a customer / vendor in the grid go through the mapped route
+        if (PremBankRecMatchingEngine::mapsToParty(PremBankRecComponent::BankCharges, _staging.BankAccountId))
+        {
+            this.routeToMappedAccount(_staging, PremBankRecComponent::BankCharges, "Bank charges");
+            return;
+        }
+
+        chargesLedger = PremLedgerDimHelper::ledgerForComponent(
+            PremBankRecComponent::BankCharges, _staging.BankAccountId);
+
+        if (!chargesLedger)
+        {
+            _staging.markManual("Bank charges - no account for component 'Bank charges' in the account mapping grid");
+            this.manualQueued++;
+            return;
+        }
+
+        journalNum = this.createBankExpenseJournal(
+            _staging,
+            chargesLedger,
+            strFmt("Bank Settlement Charges - %1",
+                DateTimeUtil::toStr(_staging.TxnDateTime)));
+
+        if (journalNum)
+        {
+            _staging.MatchedJournalNum = journalNum;
+            _staging.MappingType       = PremMappingType::BANKTOSTLMNTVENDMAPPING;
+            _staging.markReconciled(0,
+                strFmt("Charges journal created: %1", journalNum));
+            this.autoPosted++;
+            return;
+        }
+
+        _staging.markManual("Settlement charges journal creation failed");
+        this.manualQueued++;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>buildStandardStatement</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Create the standard BankAccountStatement for what this run reconciled, using the
+    // bank's own closing balance from the imported file and the last imported transaction
+    // date. Failures are reported but never rethrown: the matching results are already
+    // committed and must not be lost because a statement could not be built (a statement
+    // for that date may simply exist already).
+    // </summary>
+    private void buildStandardStatement()
+    {
+        PremBankStmtStatementBuilder builder;
+        TransDate stmtDate;
+        str       statementNum;
+
+        try
+        {
+            stmtDate = this.toDate
+                ? this.toDate
+                : PremBankStmtStatementBuilder::lastTransactionDate(this.bankAccountId);
+
+            // Ask before building. Letting the builder refuse would work, but it refuses
+            // through error(), which paints a red line in the infolog even though this run
+            // succeeded and the existing statement is the correct outcome.
+            statementNum = PremBankStmtStatementBuilder::statementNumber(this.bankAccountId, stmtDate);
+
+            if (PremBankStmtStatementBuilder::statementExists(this.bankAccountId, stmtDate))
+            {
+                info(strFmt("Standard bank statement %1 already exists - left as it is. "
+                    + "Use 'Unmark bank statement' if it needs rebuilding.", statementNum));
+                return;
+            }
+
+            builder = PremBankStmtStatementBuilder::construct(
+                this.bankAccountId, stmtDate, PremStmtBalanceSource::FromImportFile);
+
+            statementNum = builder.run();
+
+            info(strFmt("Standard bank statement %1 created - %2 line(s) cleared.",
+                statementNum, builder.getLinesCleared()));
+
+            if (builder.getLinesSkippedManual())
+            {
+                warning(strFmt("%1 line(s) totalling %2 remain in the manual queue and were not cleared.",
+                    builder.getLinesSkippedManual(), builder.getAmountSkippedManual()));
+            }
+        }
+        catch (Exception::Error)
+        {
+            warning(strFmt("Matching finished, but the standard bank statement was not created for %1. "
+                + "Create it later from 'Create Bank Statement'.", this.bankAccountId));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>runPOSReconciliation</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Run POS-specific reconciliation (consolidated MSF+GST journal, R-12).
+    // </summary>
+    private void runPOSReconciliation()
+    {
+        PremPOSReconciliation posRec;
+        posRec = PremPOSReconciliation::construct(this.bankAccountId, this.processDate);
+        posRec.processMSFCharges();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createBankReceiptJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Create bank receipt journal (Dr/Cr Bank, offsetting a GL account or a second bank).
+    // </summary>
+    // Pass _offsetBankAccount to settle against another bank account rather than a ledger
+    // account - a POS settlement moves money out of the acquirer's account and into ours,
+    // so both sides are banks. Leave it blank for a true GL offset, such as a loan drawdown.
+    private LedgerJournalId createBankReceiptJournal(
+        PremBankStmtStaging _staging,
+        LedgerDimensionAccount _offsetLedger,
+        str _narration,
+        BankAccountID _offsetBankAccount = '')
+    {
+        LedgerJournalTable  journalTable;
+        LedgerJournalTrans  journalTrans;
+        PremBankRecParameters params;
+        LedgerJournalCheckPost ledgerJournalCheckPost;
+
+        params = PremBankRecParameters::find();
+
+        if (!params.BankJournalName)
+        {
+            error("No Bank journal name configured in Bank Reconciliation Parameters.");
+            return '';
+        }
+
+        if (!_offsetLedger && !_offsetBankAccount)
+        {
+            error(strFmt("No offset account is configured for this posting (%1).", _narration));
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.insert();
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum         = journalTable.JournalNum;
+        journalTrans.Voucher            = PremBankRecHelper::nextJournalVoucher(journalTable);
+        journalTrans.DefaultDimension   = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        journalTrans.TransDate          = DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType        = LedgerJournalACType::Bank;
+        // Account type alone does not fill the Bank tab. LedgerJournalTrans.BankAccountId
+        // is what the journal line shows as "Account identification", and standard D365
+        // only populates it from the LedgerDimension modifiedField logic - which a direct
+        // insert() never runs, so it stayed blank on every line we posted.
+        journalTrans.BankAccountId        = _staging.BankAccountId;
+        journalTrans.LedgerDimension =
+    LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+        _staging.BankAccountId,
+        LedgerJournalACType::Bank);
+        if (_offsetBankAccount)
+        {
+            // A bank on the offset side carries no dimensions of its own, exactly like the
+            // inter-bank transfers, so give it the account's own set or it posts as
+            // "...---------" and PMGC rejects it for a missing BRANCH.
+            journalTrans.OffsetAccountType      = LedgerJournalACType::Bank;
+            journalTrans.OffsetDefaultDimension = PremBankRecHelper::bankDefaultDimension(_offsetBankAccount);
+            journalTrans.OffsetLedgerDimension  =
+                LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+                    _offsetBankAccount,
+                    LedgerJournalACType::Bank);
+        }
+        else
+        {
+            journalTrans.OffsetAccountType     = LedgerJournalACType::Ledger;
+            journalTrans.OffsetLedgerDimension = _offsetLedger;
+        }
+
+        journalTrans.AmountCurDebit     = _staging.CreditDebitFlag == PremCDFlag::Credit ? _staging.Amount : 0;
+        journalTrans.AmountCurCredit    = _staging.CreditDebitFlag == PremCDFlag::Debit ? _staging.Amount : 0;
+        journalTrans.CurrencyCode       = 'INR';
+        journalTrans.Txt                = _narration;
+        journalTrans.DocumentNum        = _staging.ReferenceNo;
+        journalTrans.insert();
+
+        ledgerJournalCheckPost = LedgerJournalCheckPost::newLedgerJournalTable(
+            journalTable, NoYes::Yes);
+        ledgerJournalCheckPost.run();
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createUPISettlementJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // One voucher for a UPI acquirer's day on one terminal:
+    //
+    //     Statement bank (HDFC)          Dr  net received (the bank line)
+    //     MSF expense                    Dr  MSF
+    //     CGST + SGST / IGST input       Dr  GST on the MSF
+    //     Clearing bank (PhonePe, ...)   Cr  net + MSF + GST
+    //
+    // The clearing credit is built from the bank amount plus the charges rather than taken
+    // from the file's gross, so the voucher always balances; a paisa of rounding stays on
+    // the clearing bank where it can be seen.
+    // </summary>
+    private LedgerJournalId createUPISettlementJournal(
+        PremBankStmtStaging _staging,
+        PremTerminalId      _terminalId,
+        TransDate           _settlementDate,
+        BankAccountID       _clearingBank,
+        str                 _narration)
+    {
+        PremPOSSettlementStaging    pos;
+        PremPOSTerminalMap          terminalMap = PremPOSTerminalMap::findByTerminalId(_terminalId);
+        PremBankRecParameters       params      = PremBankRecParameters::find();
+        LedgerJournalTable          journalTable;
+        LedgerDimensionAccount      msfLedger, cgstLedger, sgstLedger, igstLedger;
+        AmountMST                   msf, cgst, sgst, igst;
+        Voucher                     voucher;
+
+        if (!params.BankJournalName)
+        {
+            error("No Bank journal name configured in Bank Reconciliation Parameters.");
+            return '';
+        }
+
+        select sum(MSFCharge), sum(CGSTAmount), sum(SGSTAmount), sum(IGSTAmount) from pos
+            where pos.TerminalId     == _terminalId
+               && pos.SettlementDate == _settlementDate
+               && pos.RecordType     == PremPOSRecordType::Sale
+               && pos.Reconciled     == NoYes::No;
+
+        msf  = pos.MSFCharge;
+        cgst = pos.CGSTAmount;
+        sgst = pos.SGSTAmount;
+        igst = pos.IGSTAmount;
+
+        // Resolve every account before anything is written.
+        if (msf)
+        {
+            msfLedger = terminalMap.MSFExpenseAccount
+                ? terminalMap.MSFExpenseAccount
+                : PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::MSFExpense, _staging.BankAccountId);
+        }
+        if (cgst)
+        {
+            cgstLedger = PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::CGSTInput, _staging.BankAccountId);
+        }
+        if (sgst)
+        {
+            sgstLedger = PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::SGSTInput, _staging.BankAccountId);
+        }
+        if (igst)
+        {
+            igstLedger = PremLedgerDimHelper::ledgerForComponent(PremBankRecComponent::IGSTInput, _staging.BankAccountId);
+        }
+
+        if ((msf && !msfLedger) || (cgst && !cgstLedger) || (sgst && !sgstLedger) || (igst && !igstLedger))
+        {
+            error(strFmt("Terminal %1: MSF expense or GST input account is missing. Set the MSF expense "
+                + "account on POS terminal mapping and the CGST/SGST/IGST input rows in the account "
+                + "mapping grid of Bank reconciliation parameters.", _terminalId));
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.insert();
+
+        voucher = PremBankRecHelper::nextJournalVoucher(journalTable);
+
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
+            _staging.BankAccountId, 0, _staging.Amount, _narration);
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Ledger,
+            '', msfLedger, msf, strFmt("MSF - %1", _narration));
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Ledger,
+            '', cgstLedger, cgst, strFmt("CGST on MSF - %1", _narration));
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Ledger,
+            '', sgstLedger, sgst, strFmt("SGST on MSF - %1", _narration));
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Ledger,
+            '', igstLedger, igst, strFmt("IGST on MSF - %1", _narration));
+        this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
+            _clearingBank, 0, -(_staging.Amount + msf + cgst + sgst + igst), _narration);
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>addUPISettlementLine</Name>
+				<Source><![CDATA[
+    // <summary>
+    // One line of the UPI settlement voucher. Positive = debit, negative = credit, zero = none.
+    // </summary>
+    private void addUPISettlementLine(
+        LedgerJournalTable      _journalTable,
+        Voucher                 _voucher,
+        PremBankStmtStaging     _staging,
+        LedgerJournalACType     _accountType,
+        BankAccountID           _bankAccountId,
+        LedgerDimensionAccount  _ledgerDim,
+        AmountMST               _amount,
+        str                     _narration)
+    {
+        LedgerJournalTrans journalTrans;
+
+        if (!_amount)
+        {
+            return;
+        }
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum   = _journalTable.JournalNum;
+        journalTrans.Voucher      = _voucher;
+        journalTrans.TransDate    = DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType  = _accountType;
+        journalTrans.CurrencyCode = 'INR';
+        journalTrans.Txt          = _narration;
+        journalTrans.DocumentNum  = _staging.ReferenceNo;
+
+        if (_accountType == LedgerJournalACType::Bank)
+        {
+            // Same as createBankReceiptJournal: BankAccountId fills the Bank tab, and the
+            // account's own dimensions carry the BRANCH the account structure requires.
+            journalTrans.BankAccountId    = _bankAccountId;
+            journalTrans.LedgerDimension  = LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+                _bankAccountId, LedgerJournalACType::Bank);
+            journalTrans.DefaultDimension = PremBankRecHelper::bankDefaultDimension(_bankAccountId);
+        }
+        else
+        {
+            journalTrans.LedgerDimension  = _ledgerDim;
+            journalTrans.DefaultDimension = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        }
+
+        if (_amount > 0)
+        {
+            journalTrans.AmountCurDebit  = _amount;
+        }
+        else
+        {
+            journalTrans.AmountCurCredit = -_amount;
+        }
+
+        journalTrans.insert();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createInterBankJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Create inter-bank transfer journal (source bank credited, dest bank debited).
+    // </summary>
+    private LedgerJournalId createInterBankJournal(
+        PremBankStmtStaging _staging,
+        BankAccountID _destAccount,
+        str _ifsc)
+    {
+        LedgerJournalTable journalTable;
+        LedgerJournalTrans journalTrans;
+        PremBankRecParameters params;
+
+        params = PremBankRecParameters::find();
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.insert();
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum         = journalTable.JournalNum;
+        journalTrans.Voucher            = PremBankRecHelper::nextJournalVoucher(journalTable);
+        journalTrans.DefaultDimension   = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        journalTrans.TransDate          = DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType        = LedgerJournalACType::Bank;
+        journalTrans.BankAccountId        = _staging.BankAccountId;
+        journalTrans.LedgerDimension =
+    LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+        _staging.BankAccountId,
+        LedgerJournalACType::Bank);
+        // Both sides of a transfer between our own accounts are banks, so the OFFSET needs
+        // its own default dimensions too. Setting only the primary side left the second
+        // bank posting as "12110133---------" and the PMGC structure rejected it for a
+        // missing BRANCH - the same failure, one line further down.
+        journalTrans.OffsetDefaultDimension = PremBankRecHelper::bankDefaultDimension(_destAccount);
+        journalTrans.OffsetAccountType  = LedgerJournalACType::Bank;
+        journalTrans.OffsetLedgerDimension =
+    LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+        _destAccount,
+        LedgerJournalACType::Bank);
+        journalTrans.AmountCurCredit    = _staging.Amount;
+        journalTrans.CurrencyCode       = 'INR';
+        journalTrans.Txt                = strFmt("Self transfer via %1", _ifsc);
+        journalTrans.insert();
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeBankDebitToLedger</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Post a bank debit against a configured ledger account: Dr ledger, Cr bank.
+    // </summary>
+    // <remarks>
+    // Shared by the three debit routes that differ only in which account they hit -
+    // WCDL repayment (loan liability), bank and loan interest (interest expense) and
+    // GST remittance (GST payable). Each of these is money leaving the bank for a known
+    // purpose, with nothing in D365 to match against, so the entry has to be raised.
+    // </remarks>
+    private void routeBankDebitToLedger(
+        PremBankStmtStaging    _staging,
+        LedgerDimensionAccount _ledgerAccount,
+        str                    _what,
+        str                    _parameterName,
+        TransDate              _postingDate = dateNull())
+    {
+        LedgerJournalId journalNum;
+
+        if (!_staging.isDebit())
+        {
+            _staging.markManual(strFmt("Classified as %1 but the amount is not a debit", _what));
+            this.manualQueued++;
+            return;
+        }
+
+        if (!_ledgerAccount)
+        {
+            _staging.markManual(strFmt(
+                "%1 of %2 - set '%3' on the General ledger accounts tab of Bank reconciliation "
+                + "parameters, then reclassify this line.",
+                _what, abs(_staging.Amount), _parameterName));
+            this.manualQueued++;
+            return;
+        }
+
+        journalNum = this.createBankExpenseJournal(
+            _staging,
+            _ledgerAccount,
+            strFmt("%1 - %2", _what, _staging.PremDescription),
+            _postingDate);
+
+        if (!journalNum)
+        {
+            _staging.markManual(strFmt("%1 of %2 - journal could not be created",
+                _what, abs(_staging.Amount)));
+            this.manualQueued++;
+            return;
+        }
+
+        _staging.MatchedJournalNum = journalNum;
+        _staging.markReconciled(0, strFmt("%1 posted: journal %2", _what, journalNum));
+        this.autoPosted++;
+
+        PremBankRecAuditLog::logEvent(
+            _staging.RecId,
+            "BANK_DEBIT_POSTED",
+            strFmt("%1 | Journal %2 | Amount %3 | %4",
+                _what, journalNum, abs(_staging.Amount), _staging.PremDescription));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeLoanDisbursement</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-15: Loan or working-capital drawdown credited to the bank.
+    // </summary>
+    // <remarks>
+    // Money arriving from a lender, not from a customer and not from another account of
+    // ours, so nothing can be matched against it - the entry has to be raised. The bank is
+    // debited and the loan liability account credited, which is what finance was doing by
+    // hand for "WCDL DISBURSED" and for the IDFC drawdown.
+    // </remarks>
+    private void routeLoanDisbursement(PremBankStmtStaging _staging)
+    {
+        LedgerJournalId journalNum;
+        LedgerDimensionAccount loanLedger;
+
+        if (!_staging.isCredit())
+        {
+            _staging.markManual("Classified as a loan drawdown but the amount is not a credit");
+            this.manualQueued++;
+            return;
+        }
+
+        if (PremBankRecMatchingEngine::mapsToParty(PremBankRecComponent::LoanLiability, _staging.BankAccountId))
+        {
+            this.routeToMappedAccount(_staging, PremBankRecComponent::LoanLiability, "Loan / WCDL drawdown");
+            return;
+        }
+
+        loanLedger = PremLedgerDimHelper::ledgerForComponent(
+            PremBankRecComponent::LoanLiability, _staging.BankAccountId);
+
+        if (!loanLedger)
+        {
+            _staging.markManual(strFmt(
+                "Loan / WCDL drawdown of %1 - add a 'Loan / WCDL liability' row in the account "
+                + "mapping grid on Bank reconciliation parameters, then reclassify this line.",
+                _staging.Amount));
+            this.manualQueued++;
+            return;
+        }
+
+        journalNum = this.createBankReceiptJournal(
+            _staging,
+            loanLedger,
+            strFmt("Loan / WCDL drawdown - %1", _staging.PremDescription));
+
+        if (!journalNum)
+        {
+            _staging.markManual(strFmt("Loan / WCDL drawdown of %1 - journal could not be created",
+                _staging.Amount));
+            this.manualQueued++;
+            return;
+        }
+
+        _staging.MatchedJournalNum = journalNum;
+        _staging.markReconciled(0, strFmt("Loan / WCDL drawdown posted to the liability account: journal %1",
+            journalNum));
+        this.autoPosted++;
+
+        PremBankRecAuditLog::logEvent(
+            _staging.RecId,
+            "LOAN_DRAWDOWN",
+            strFmt("Journal %1 | Amount %2 | %3", journalNum, _staging.Amount, _staging.PremDescription));
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>routeCustomerAdvance</Name>
+				<Source><![CDATA[
+    // <summary>
+    // R-14: Advance received from a customer, i.e. money in before any invoice or receipt
+    // exists in D365. Nothing can be matched, so the credit is parked on the fixed advance
+    // customer configured on the bank account and finance re-allocates it later.
+    // Insurance receipts never reach here: R-10 owns them and carries its own customer.
+    // </summary>
+    private void routeCustomerAdvance(PremBankStmtStaging _staging)
+    {
+        BankAccountTable bankAccount;
+        LedgerJournalId  journalNum;
+
+        // A debit is money going out; it cannot be an advance received.
+        if (!_staging.isCredit())
+        {
+            _staging.markManual("Classified as customer advance but the amount is not a credit");
+            this.manualQueued++;
+            return;
+        }
+
+        // Most advances go to the customer's card, but some senders are vendors (finance).
+        // A party row in the account mapping grid - or a generic ADVANCE FROM CUSTOMER row -
+        // decides which; the bank account's holding customer below is the fallback.
+        if (PremBankRecAccountMap::findForNarration(
+                _staging.PremDescription, _staging.BankAccountId,
+                PremBankRecComponent::AdvanceFromCustomer).RecId)
+        {
+            this.routeToMappedAccount(_staging, PremBankRecComponent::AdvanceFromCustomer,
+                "Advance from customer");
+            return;
+        }
+
+        bankAccount = BankAccountTable::find(_staging.BankAccountId);
+
+        if (!bankAccount.PremAdvanceCustAccount)
+        {
+            _staging.markManual(strFmt(
+                "Customer advance - no advance customer configured on bank account %1. "
+                + "Set 'Advance-from-customer account' on the bank account.",
+                _staging.BankAccountId));
+            this.manualQueued++;
+            return;
+        }
+
+        journalNum = this.createCustomerAdvanceJournal(
+            _staging,
+            bankAccount.PremAdvanceCustAccount,
+            strFmt("Advance from customer - %1", _staging.PremDescription));
+
+        if (journalNum)
+        {
+            _staging.MatchedJournalNum = journalNum;
+            _staging.markManual(strFmt(
+                "Customer advance journal %1 created on %2 - review and post, then re-allocate to the actual customer",
+                journalNum, bankAccount.PremAdvanceCustAccount));
+            this.manualQueued++;
+
+            PremBankRecAuditLog::logEvent(
+                _staging.RecId,
+                "CUST_ADVANCE_JOURNAL",
+                strFmt("Journal %1 | Cust %2 | Amount %3 | %4",
+                    journalNum, bankAccount.PremAdvanceCustAccount, _staging.Amount, _staging.PremDescription));
+        }
+        else
+        {
+            _staging.markManual("Customer advance - journal creation failed");
+            this.manualQueued++;
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createCustomerAdvanceJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Build a customer payment journal for an advance and deliberately leave it unposted.
+    // The customer here is a holding account, not the party that actually paid, so a human
+    // confirms the allocation before anything hits the ledger.
+    // </summary>
+    private LedgerJournalId createCustomerAdvanceJournal(
+        PremBankStmtStaging _staging,
+        CustAccount         _custAccount,
+        str                 _narration)
+    {
+        LedgerJournalTable      journalTable;
+        LedgerJournalTrans      journalTrans;
+        PremBankRecParameters   params;
+
+        params = PremBankRecParameters::find();
+
+        if (!params.CustPaymentJournalName)
+        {
+            PremBankRecAuditLog::logEvent(
+                _staging.RecId,
+                "CUST_ADVANCE_NO_JOURNAL_NAME",
+                "Customer payment journal name is not set in Bank reconciliation parameters");
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.CustPaymentJournalName;
+        journalTable.Name        = strFmt("Advance from customer %1", _staging.BankAccountId);
+        journalTable.insert();
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum  = journalTable.JournalNum;
+        journalTrans.Voucher     = PremBankRecHelper::nextJournalVoucher(journalTable);
+        journalTrans.DefaultDimension = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        journalTrans.TransDate   = DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType = LedgerJournalACType::Bank;
+        journalTrans.BankAccountId = _staging.BankAccountId;
+        journalTrans.LedgerDimension =
+            LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+                _staging.BankAccountId,
+                LedgerJournalACType::Bank);
+        journalTrans.OffsetAccountType = LedgerJournalACType::Cust;
+        journalTrans.OffsetLedgerDimension =
+            LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+                _custAccount,
+                LedgerJournalACType::Cust);
+        journalTrans.AmountCurDebit = _staging.Amount;
+        journalTrans.CurrencyCode   = 'INR';
+        journalTrans.Txt            = _narration;
+        journalTrans.DocumentNum    = _staging.ReferenceNo;
+        journalTrans.insert();
+
+        // Intentionally not posted - see the method comment.
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createCustomerPaymentJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Create customer payment journal (used for insurance receipts).
+    // </summary>
+    private LedgerJournalId createCustomerPaymentJournal(
+        PremBankStmtStaging _staging,
+        CustAccount _custAccount,
+        LedgerDimensionAccount _custLedger,
+        str _narration)
+    {
+        LedgerJournalTable journalTable;
+        LedgerJournalTrans journalTrans;
+        PremBankRecParameters params;
+        CustTable             custTable;
+
+        params = PremBankRecParameters::find();
+
+        select firstonly DefaultDimension from custTable
+            where custTable.AccountNum == _custAccount;
+
+        if (!custTable.DefaultDimension)
+        {
+            _staging.markManual(strFmt(
+                "Customer %1 has no default financial dimensions - set them on the customer master before this receipt can post.",
+                _custAccount));
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.CustPaymentJournalName;
+        journalTable.insert();
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum         = journalTable.JournalNum;
+        journalTrans.Voucher            = PremBankRecHelper::nextJournalVoucher(journalTable);
+        journalTrans.DefaultDimension   = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        // The bank is primary here and the CUSTOMER is the offset, so the customer side
+        // needs its own dimensions or the voucher posts as "...---------" and PMGC rejects
+        // it for a missing BRANCH - the same failure the bank-as-offset journals had.
+        // The dimensions come from the customer master and nowhere else: falling back to
+        // the bank would book the receipt against the bank's branch instead of the one
+        // that actually earned it, which posts cleanly and is wrong. _custLedger is 0 in
+        // every mapping row and was never a usable source either.
+        journalTrans.OffsetDefaultDimension = custTable.DefaultDimension;
+        journalTrans.TransDate          = DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType        = LedgerJournalACType::Bank;
+        journalTrans.BankAccountId        = _staging.BankAccountId;
+        journalTrans.LedgerDimension =
+    LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+        _staging.BankAccountId,
+        LedgerJournalACType::Bank);
+        journalTrans.OffsetAccountType  = LedgerJournalACType::Cust;
+        journalTrans.OffsetLedgerDimension =
+    LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+        _custAccount,
+        LedgerJournalACType::Cust);
+        journalTrans.AmountCurDebit     = _staging.Amount;
+        journalTrans.CurrencyCode       = 'INR';
+        journalTrans.Txt                = _narration;
+        journalTrans.DocumentNum        = _staging.ReferenceNo;
+        journalTrans.insert();
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createBankExpenseJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Create bank expense journal (used for settlement/bank charges).
+    // </summary>
+    private LedgerJournalId createBankExpenseJournal(
+        PremBankStmtStaging _staging,
+        LedgerDimensionAccount _expenseLedger,
+        str _narration,
+        TransDate _postingDate = dateNull())
+    {
+        LedgerJournalTable journalTable;
+        LedgerJournalTrans journalTrans;
+        PremBankRecParameters params;
+
+        params = PremBankRecParameters::find();
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName = params.BankJournalName;
+        journalTable.insert();
+
+        journalTrans.clear();
+        journalTrans.initValue();
+        journalTrans.JournalNum         = journalTable.JournalNum;
+        journalTrans.Voucher            = PremBankRecHelper::nextJournalVoucher(journalTable);
+        // The BANK is the OFFSET in this journal - the expense account is primary - so the
+        // bank's dimensions belong on OffsetDefaultDimension. Putting them on
+        // DefaultDimension left the bank side posting as "12110133---------" and the PMGC
+        // structure rejected it for a missing BRANCH, while the POS journals (bank primary)
+        // went through fine. The expense side carries its own dimensions in _expenseLedger.
+        journalTrans.OffsetDefaultDimension = PremBankRecHelper::bankDefaultDimension(_staging.BankAccountId);
+        journalTrans.TransDate          = _postingDate ? _postingDate : DateTimeUtil::date(_staging.TxnDateTime);
+        journalTrans.AccountType        = LedgerJournalACType::Ledger;
+        journalTrans.LedgerDimension    = _expenseLedger;
+        journalTrans.OffsetAccountType  = LedgerJournalACType::Bank;
+        journalTrans.OffsetLedgerDimension =
+    LedgerDynamicAccountHelper::getDynamicAccountFromAccountNumber(
+        _staging.BankAccountId,
+        LedgerJournalACType::Bank);
+        journalTrans.AmountCurDebit     = _staging.Amount;
+        journalTrans.CurrencyCode       = 'INR';
+        journalTrans.Txt                = _narration;
+        journalTrans.insert();
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>createReversalJournal</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Create reversal journal for NEFT returns - new journal, swapped Dr/Cr lines.
+    // </summary>
+    private LedgerJournalId createReversalJournal(
+        PremBankStmtStaging _origStaging,
+        str _narration)
+    {
+        LedgerJournalTable origTable;
+        LedgerJournalTable journalTable;
+        LedgerJournalTrans journalTrans, origTrans;
+        LedgerJournalName  journalName;
+        str                reversalVoucher;
+
+        select firstonly origTable
+            where origTable.JournalNum == _origStaging.MatchedJournalNum;
+
+        if (!origTable.RecId)
+        {
+            return '';
+        }
+
+        select firstonly journalName
+            where journalName.JournalType == origTable.JournalType;
+
+        if (!journalName.JournalName)
+        {
+            return '';
+        }
+
+        journalTable.clear();
+        journalTable.initValue();
+        journalTable.JournalName  = journalName.JournalName;
+        journalTable.insert();
+
+        // One fresh voucher for the whole reversal: journalTrans.data() copies the ORIGINAL
+        // voucher across, which belongs to the journal being reversed and would leave the
+        // new entry unpostable.
+        reversalVoucher = PremBankRecHelper::nextJournalVoucher(journalTable);
+
+        while select origTrans
+            where origTrans.JournalNum == _origStaging.MatchedJournalNum
+        {
+            journalTrans.clear();
+            journalTrans.data(origTrans);
+            journalTrans.RecId           = 0;
+            journalTrans.JournalNum      = journalTable.JournalNum;
+            journalTrans.Voucher         = reversalVoucher;
+            journalTrans.AmountCurDebit  = origTrans.AmountCurCredit;
+            journalTrans.AmountCurCredit = origTrans.AmountCurDebit;
+            journalTrans.Txt             = strFmt("REVERSAL: %1", origTrans.Txt);
+            journalTrans.insert();
+        }
+
+        LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
+
+        return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>reconcileMatch</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Mark record as auto-matched and update counters.
+    // </summary>
+    private void reconcileMatch(PremBankStmtStaging _staging, RefRecId _matchRecId, str _note)
+    {
+        _staging.markReconciled(_matchRecId, _note);
+        this.markBankTransReconciled(_matchRecId);
+        this.autoMatched++;
+
+        PremBankRecAuditLog::logMatch(_staging.RecId, _matchRecId, _note);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>markBankTransReconciled</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Flag the matched bank transaction as reconciled so D365's own unreconciled list stays
+    // in step with ours and the same transaction cannot be picked up again.
+    //
+    // MatchedRecId can point at a CustTrans instead of a BankAccountTrans, so the update is
+    // guarded by account as well as RecId and simply does nothing when the id belongs to
+    // another table.
+    //
+    // Note this runs at MATCH time, ahead of any statement being posted, which is earlier
+    // than standard D365 would set it. PremBankStmtStaging::unmatch and
+    // PremBankStmtStatementBuilder::unmark both clear the flag again, so a wrong match stays
+    // reversible.
+    // </summary>
+    private void markBankTransReconciled(RefRecId _matchRecId)
+    {
+        BankAccountTrans bankTrans;
+
+        if (!_matchRecId)
+        {
+            return;
+        }
+
+        select firstonly forupdate bankTrans
+            where bankTrans.RecId      == _matchRecId
+               && bankTrans.AccountId  == this.bankAccountId
+               && bankTrans.Reconciled == NoYes::No;
+
+        if (bankTrans.RecId)
+        {
+            bankTrans.Reconciled = NoYes::Yes;
+            bankTrans.update();
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>sendWorkflowAlert</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Send a D365 in-app alert (EventInbox) for records needing manual action.
+    // </summary>
+    private void sendWorkflowAlert(PremBankStmtStaging _staging, str _message)
+    {
+        try
+        {
+            EventInbox eventInbox;
+            eventInbox.clear();
+            eventInbox.UserId       = curUserId();
+            eventInbox.Subject      = _message;
+            eventInbox.Message      = strFmt(
+                "Bank Reconciliation Alert\n" +
+                "Bank: %1\n" +
+                "Date: %2\n" +
+                "Amount: %3\n" +
+                "Description: %4\n" +
+                "Status: Manual Review Required",
+                _staging.BankAccountId,
+                _staging.TxnDateTime,
+                _staging.Amount,
+                _staging.PremDescription);
+            eventInbox.insert();
+        }
+        catch
+        {
+            warning(strFmt("Failed to send workflow alert: %1", _message));
+        }
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>reportMisses</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Spell out on screen every line the run could not match, and why.
+    // </summary>
+    // <remarks>
+    // The summary counts alone ("Manual Queue: 31") tell nobody what to do next. Each
+    // unmatched line is listed with its reference, amount and the note the rule left, and
+    // the notes are then tallied so the biggest single cause is obvious at a glance -
+    // sixteen lines saying "UTR not found in D365" is one problem, not sixteen.
+    // </remarks>
+    private void reportMisses()
+    {
+        PremBankStmtStaging staging;
+        Map    reasonCount = new Map(Types::String, Types::Integer);
+        MapEnumerator mapEnum;
+        utcDateTime fromDateTime, toDateTime;
+        str    reason, headline;
+        int    listed;
+        #define.MaxLinesListed(25)
+
+        // Nothing was picked up this time - every line is already reconciled or already
+        // sitting in the manual queue. Listing those rows would read as if this run had
+        // just failed on them, which is not what happened, so only the standing count is
+        // reported. This check has to come BEFORE the listing loop, not after it.
+        if (!this.totalProcessed)
+        {
+            select count(RecId) from staging
+                where staging.BankAccountId == this.bankAccountId
+                   && staging.ImportStatus  == PremBankStmtStatus::Manual;
+
+            if (staging.RecId)
+            {
+                info(strFmt("No new lines to process for %1 - every imported line has already been "
+                    + "matched or queued. %2 line(s) are still waiting in the manual queue; use "
+                    + "Reclassify on the staging list to re-evaluate them under the current rules.",
+                    this.bankAccountId, staging.RecId));
+            }
+            else
+            {
+                info(strFmt("No new lines to process for %1.", this.bankAccountId));
+            }
+
+            return;
+        }
+
+        // Same scope the run itself used: this bank account and this date window.
+        fromDateTime = this.fromDate
+            ? DateTimeUtil::newDateTime(this.fromDate, 0)
+            : DateTimeUtil::minValue();
+        toDateTime = this.toDate
+            ? DateTimeUtil::newDateTime(this.toDate, 86399)
+            : DateTimeUtil::maxValue();
+
+        while select staging
+            order by Amount desc
+            where staging.BankAccountId == this.bankAccountId
+               && staging.ImportStatus  == PremBankStmtStatus::Manual
+               && staging.TxnDateTime   >= fromDateTime
+               && staging.TxnDateTime   <= toDateTime
+        {
+            listed++;
+
+            if (listed <= #MaxLinesListed)
+            {
+                warning(strFmt("Not matched: %1 | %2 | %3 | %4",
+                    staging.ReferenceNo ? staging.ReferenceNo : '(no ref)',
+                    staging.Amount,
+                    staging.TxnDateTime ? date2Str(DateTimeUtil::date(staging.TxnDateTime), 123, 2, 4, 2, 4, 4) : '',
+                    staging.MatchNote));
+            }
+
+            // Group on the leading part of the note: the tail carries per-line values
+            // (a UTR, a cheque number) that would otherwise make every reason unique.
+            reason = subStr(staging.MatchNote, 1, 40);
+
+            if (reasonCount.exists(reason))
+            {
+                reasonCount.insert(reason, reasonCount.lookup(reason) + 1);
+            }
+            else
+            {
+                reasonCount.insert(reason, 1);
+            }
+        }
+
+        if (!listed)
+        {
+            info("Nothing was left unmatched in this run.");
+            return;
+        }
+
+
+        if (listed > #MaxLinesListed)
+        {
+            warning(strFmt("... and %1 more unmatched line(s). Open the Bank statement staging list for the full set.",
+                listed - #MaxLinesListed));
+        }
+
+        headline = strFmt("%1 line(s) need manual attention, grouped by reason:", listed);
+        warning(headline);
+
+        // One infolog line per reason. Building a single multi-line string here would need
+        // a newline inside an X++ string literal, which the compiler rejects.
+        mapEnum = reasonCount.getEnumerator();
+        while (mapEnum.moveNext())
+        {
+            reason = strFmt("   %1 x  %2", mapEnum.currentValue(), mapEnum.currentKey());
+            warning(reason);
+            headline += reason;
+        }
+
+        PremBankRecAuditLog::logEvent(0, "MATCHING_MISSES", headline);
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>logRunSummary</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Log final run summary to infolog + audit trail.
+    // </summary>
+    private void logRunSummary()
+    {
+        str summary = strFmt(
+            "Matching Engine Complete\n" +
+            "Bank Account: %1\n" +
+            "Date Range: %2\n" +
+            "Total Processed: %3\n" +
+            "Auto-Matched: %4 (%5%)\n" +
+            "Auto-Posted: %6 (%7%)\n" +
+            "Manual Queue: %8 (%9%)",
+            this.bankAccountId,
+            strFmt("%1 to %2",
+                this.fromDate ? date2Str(this.fromDate, 123, 2, 4, 2, 4, 4) : "no start",
+                this.toDate   ? date2Str(this.toDate,   123, 2, 4, 2, 4, 4) : "no end"),
+            this.totalProcessed,
+            this.autoMatched,
+            this.totalProcessed > 0 ? (this.autoMatched * 100.0 / this.totalProcessed) : 0,
+            this.autoPosted,
+            this.totalProcessed > 0 ? (this.autoPosted * 100.0 / this.totalProcessed) : 0,
+            this.manualQueued,
+            this.totalProcessed > 0 ? (this.manualQueued * 100.0 / this.totalProcessed) : 0);
+
+        info(summary);
+
+        PremBankRecAuditLog::logEvent(0, "MATCHING_COMPLETE", summary);
+
+        this.reportMisses();
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>totalProcessedCount</Name>
+				<Source><![CDATA[
+    public int totalProcessedCount()  { return this.totalProcessed; }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>autoMatchedCount</Name>
+				<Source><![CDATA[
+    public int autoMatchedCount()     { return this.autoMatched; }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>autoPostedCount</Name>
+				<Source><![CDATA[
+    public int autoPostedCount()      { return this.autoPosted; }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>manualQueuedCount</Name>
+				<Source><![CDATA[
+    public int manualQueuedCount()    { return this.manualQueued; }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>main</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Static entry point (menu item handler / quick action).
+    // </summary>
+    public static void main(Args _args)
+    {
+        PremBankRecMatchingEngine engine;
+        BankAccountID bankAccountId = '';
+        PremBankRecRunDialog dialog;
+        NoYes runPOS = NoYes::No;
+        TransDate fromDate = dateNull();
+        TransDate toDate   = dateNull();
+        PremReconMethod reconMethod = PremBankRecParameters::find().ReconMethod;
+
+        if (_args && _args.parm())
+        {
+            bankAccountId = _args.parm();
+        }
+        else
+        {
+            dialog = PremBankRecRunDialog::construct();
+            if (!dialog.runDialog())
+            {
+                return;
+            }
+            bankAccountId = dialog.getBankAccountId();
+            runPOS        = dialog.getRunPOS();
+            fromDate      = dialog.getFromDate();
+            toDate        = dialog.getToDate();
+            reconMethod   = dialog.getReconMethod();
+        }
+
+        engine = PremBankRecMatchingEngine::construct(
+            bankAccountId, dateNull(), runPOS, fromDate, toDate, reconMethod);
+        engine.run();
+    }
+
+]]></Source>
+			</Method>
+		</Methods>
+	</SourceCode>
+</AxClass>
