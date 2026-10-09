@@ -1,16 +1,16 @@
-Provider,Terminal ID (PremPOSTerminalMap.TerminalId),Merchant code,Name in file,Outlet code (fill),Settlement bank account (fill),POS receivable / clearing account (fill),MSF expense account (fill)
-PhonePe,MST2307071545098946089530,PREMMOTORSVKI,Prem Motors - Workshop / Terminal 1,,,,
-PhonePe,MST2307061802213976805248,PREMMOTORSVKI,Prem Motors - VKI Sales / Terminal 1 ,,,,
-PhonePe,MST2307111058545130788123,PREMMOTORSVKI,VKI True Value / Terminal 1,,,,
-PhonePe,MST2307111105206896089583,PREMMOTORSVKI,Kothputli Sales / Terminal 1,,,,
-PhonePe,MST2307071452387857919999,PREMMOTORSVKI,Prem Motors - VKI Sales / Terminal 2,,,,
-PhonePe,MST2307111131231081881268,PREMMOTORSVKI,BAGRU SERVICE / Terminal 1,,,,
-PhonePe,MST2307111143044971646846,PREMMOTORSVKI,Renwal Sales / Terminal 1,,,,
-PhonePe,MST2307071549580603005679,PREMMOTORSVKI,Prem Motors Kothputli SRV / Terminal 1,,,,
-PhonePe,MST2307111144503583696655,PREMMOTORSVKI,Jobner workshop Prem Motors / Terminal 1,,,,
-PhonePe,MST2307111141386786805770,PREMMOTORSVKI,DUDU SALES / Terminal 1,,,,
-PhonePe,MST2307111146416688567787,PREMMOTORSVKI,Jobner Sales / Terminal 1,,,,
-PhonePe,MST2307111101324596089697,PREMMOTORSVKI,VKI Commercial / Terminal 1,,,,
-MobiKwik,SMBKM28661,MBKM329926,Prem Motors Pvt Ltd Insurance,,,,
-PayZapp,62760938,CZL057,PREM MOTORS JAIPUR PRIVATE LIMITED,,,,
-PayZapp,63075144,DIU698,ATHER,,,,
+Provider,Terminal ID,Merchant code,Name in file,Outlet code (fill),Settlement bank account = acquirer clearing bank (fill),Card clearing bank account (HDFC cards only),"POS receivable account (mandatory, fill)",MSF expense account (fill),MSF rate %,GST rate %,Active,Valid from
+PhonePe,MST2307071545098946089530,PREMMOTORSVKI,Prem Motors - Workshop / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307061802213976805248,PREMMOTORSVKI,Prem Motors - VKI Sales / Terminal 1 ,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111058545130788123,PREMMOTORSVKI,VKI True Value / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111105206896089583,PREMMOTORSVKI,Kothputli Sales / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307071452387857919999,PREMMOTORSVKI,Prem Motors - VKI Sales / Terminal 2,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111131231081881268,PREMMOTORSVKI,BAGRU SERVICE / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111143044971646846,PREMMOTORSVKI,Renwal Sales / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307071549580603005679,PREMMOTORSVKI,Prem Motors Kothputli SRV / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111144503583696655,PREMMOTORSVKI,Jobner workshop Prem Motors / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111141386786805770,PREMMOTORSVKI,DUDU SALES / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111146416688567787,PREMMOTORSVKI,Jobner Sales / Terminal 1,,,,,,0,18,Yes,01-10-2026
+PhonePe,MST2307111101324596089697,PREMMOTORSVKI,VKI Commercial / Terminal 1,,,,,,0,18,Yes,01-10-2026
+MobiKwik,SMBKM28661,MBKM329926,Prem Motors Pvt Ltd Insurance,,,,,,0,18,Yes,01-10-2026
+PayZapp,62760938,CZL057,PREM MOTORS JAIPUR PRIVATE LIMITED,,,,,,0,18,Yes,01-10-2026
+PayZapp,63075144,DIU698,ATHER,,,HDFCCC5144,,,0,18,Yes,01-10-2026
