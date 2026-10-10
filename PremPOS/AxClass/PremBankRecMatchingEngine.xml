@@ -2783,10 +2783,11 @@ public class PremBankRecMatchingEngine
     //     Card clearing bank          Cr  gross
     // </summary>
     // <remarks>
-    // The narration ends with the sales date the credit covers - "63075144TERMINAL 1 CARDS
-    // SETTL. 03/10/26" - so every unpaid card sale of the terminal up to that date is taken
-    // (a weekend paid in one credit still adds up). Without a readable date, the unpaid
-    // sales due up to the credit date are taken instead.
+    // The narration ends with the credit date - "63075144TERMINAL 1 CARDS SETTL. 04/10/26"
+    // on value date 04-Oct - and HDFC pays card sales the next day. Import dates each sale
+    // T+1, so every unpaid card sale due on or before that date is taken: 03-Oct sales for
+    // the 04-Oct credit, and a weekend paid in one credit still adds up. Without a readable
+    // date, the statement date is used.
     // A difference outside 0 to 5 percent of the gross is not an MSF, so the line goes to
     // the manual queue rather than booking it.
     // </remarks>
@@ -2798,17 +2799,19 @@ public class PremBankRecMatchingEngine
         PremPOSTerminalMap          terminalMap;
         TransDate                   txnDate    = DateTimeUtil::date(_staging.TxnDateTime);
         TransDate                   salesUpTo  = PremBankRecMatchingEngine::dateFromNarration(_staging.PremDescription);
+        TransDate                   creditDate;
         AmountMST                   gross, charge;
         LedgerDimensionAccount      msfLedger;
         LedgerJournalId             journalNum;
+
+        creditDate = salesUpTo ? salesUpTo : txnDate;
 
         select sum(GrossAmount) from pos
             where pos.TerminalId     == _terminalId
                && pos.Provider       == PremPOSProvider::HdfcCards
                && pos.RecordType     == PremPOSRecordType::Sale
                && pos.Reconciled     == NoYes::No
-               && ((salesUpTo  && pos.TxnDate        <= salesUpTo)
-                || (!salesUpTo && pos.SettlementDate <= txnDate));
+               && pos.SettlementDate <= creditDate;
 
         gross = pos.GrossAmount;
 
@@ -2824,7 +2827,7 @@ public class PremBankRecMatchingEngine
             _staging.markManual(strFmt(
                 "HDFC cards %1: unpaid card sales up to %2 total %3 but the bank credited %4. "
                 + "The difference %5 is not an MSF (0 to 5 percent). Import the missing HDFC report "
-                + "or check the terminal.", _terminalId, salesUpTo ? salesUpTo : txnDate, gross,
+                + "or check the terminal.", _terminalId, creditDate, gross,
                 _staging.Amount, charge));
             this.manualQueued++;
             return true;
@@ -2882,8 +2885,7 @@ public class PremBankRecMatchingEngine
                && posUpdate.Provider       == PremPOSProvider::HdfcCards
                && posUpdate.RecordType     == PremPOSRecordType::Sale
                && posUpdate.Reconciled     == NoYes::No
-               && ((salesUpTo  && posUpdate.TxnDate        <= salesUpTo)
-                || (!salesUpTo && posUpdate.SettlementDate <= txnDate));
+               && posUpdate.SettlementDate <= creditDate;
 
         _staging.MatchedRefId      = _terminalId;
         _staging.MatchedJournalNum = journalNum;

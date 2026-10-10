@@ -69,8 +69,9 @@ settlement date (then, if needed, all unpaid rows up to that date):
     Each terminal's settlement bank        Cr  its share of the net
 
 HDFC cards: the SmartHub report has no MSF. The bank credit reads
-`63075144TERMINAL 1 CARDS SETTL. 03/10/26` - terminal number first, sales date last. The
-engine takes every unpaid card sale of that terminal up to that sales date and posts
+`63075144TERMINAL 1 CARDS SETTL. 04/10/26` - terminal number first, credit date last; HDFC
+pays the previous day's cards. Card rows are dated T+1 on import, and the engine takes every
+unpaid card sale of that terminal due on or before the credit date and posts
 
     Statement bank (HDFC)          Dr  bank credit
     MSF expense                    Dr  gross - bank credit   (must be 0 to 5 % of gross)
