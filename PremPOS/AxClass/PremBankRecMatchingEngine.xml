@@ -382,6 +382,9 @@ public class PremBankRecMatchingEngine
         journalTrans.DocumentNum  = _staging.ReferenceNo;
         journalTrans.insert();
 
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
+
         // Intentionally not posted - reviewed first, like the customer advance.
         return journalTable.JournalNum;
     }
@@ -2404,6 +2407,9 @@ public class PremBankRecMatchingEngine
         journalTrans.DocumentNum        = _staging.ReferenceNo;
         journalTrans.insert();
 
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
+
         ledgerJournalCheckPost = LedgerJournalCheckPost::newLedgerJournalTable(
             journalTable, NoYes::Yes);
         ledgerJournalCheckPost.run();
@@ -2508,6 +2514,9 @@ public class PremBankRecMatchingEngine
             '', igstLedger, igst, strFmt("IGST on MSF - %1", _narration));
         this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
             _clearingBank, 0, -(_staging.Amount + msf + cgst + sgst + igst), _narration);
+
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
 
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 
@@ -2764,6 +2773,9 @@ public class PremBankRecMatchingEngine
                 clearingBank, 0, -share, _narration);
         }
 
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
+
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 
         return journalTable.JournalNum;
@@ -2984,9 +2996,85 @@ public class PremBankRecMatchingEngine
         this.addUPISettlementLine(journalTable, voucher, _staging, LedgerJournalACType::Bank,
             _clearingBank, 0, -_gross, _narration);
 
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
+
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 
         return journalTable.JournalNum;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
+				<Name>splitOffsetLines</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Turns every journal line that carries an offset account into two lines of the same
+    // voucher - one debit line and one credit line.
+    // </summary>
+    // <remarks>
+    // The engine built each entry as one line: the bank as the account and the other side
+    // (loan, PMJPL, customer, second bank) as the offset account. Finance wants the debit and
+    // the credit as separate lines. The account keeps its amount; the offset becomes a line of
+    // its own with the opposite amount, its own dimensions and, for a bank, its own bank
+    // account id. A ledger offset without dimensions of its own takes the bank's, which is
+    // what the account structure (BRANCH) needs. Lines without an offset are left alone, so
+    // calling this on a journal that is already two-sided changes nothing.
+    // </remarks>
+    private void splitOffsetLines(LedgerJournalTable _journalTable)
+    {
+        LedgerJournalTrans  trans, offsetLine;
+
+        ttsbegin;
+
+        while select forupdate trans
+            where trans.JournalNum            == _journalTable.JournalNum
+               && trans.OffsetLedgerDimension != 0
+        {
+            offsetLine.clear();
+            offsetLine.data(trans);
+            offsetLine.RecId                  = 0;
+            offsetLine.AccountType            = trans.OffsetAccountType;
+            offsetLine.LedgerDimension        = trans.OffsetLedgerDimension;
+            offsetLine.Company                = trans.OffsetCompany ? trans.OffsetCompany : trans.Company;
+            offsetLine.AmountCurDebit         = trans.AmountCurCredit;
+            offsetLine.AmountCurCredit        = trans.AmountCurDebit;
+            offsetLine.OffsetAccountType      = LedgerJournalACType::Ledger;
+            offsetLine.OffsetLedgerDimension  = 0;
+            offsetLine.OffsetDefaultDimension = 0;
+
+            if (trans.OffsetDefaultDimension)
+            {
+                offsetLine.DefaultDimension = trans.OffsetDefaultDimension;
+            }
+            else if (trans.OffsetAccountType != LedgerJournalACType::Ledger)
+            {
+                offsetLine.DefaultDimension = 0;
+            }
+
+            offsetLine.BankAccountId = trans.OffsetAccountType == LedgerJournalACType::Bank
+                ? LedgerDynamicAccountHelper::getAccountNumberFromDynamicAccount(trans.OffsetLedgerDimension)
+                : '';
+
+            if (offsetLine.AccountType == LedgerJournalACType::Cust && !offsetLine.PostingProfile)
+            {
+                offsetLine.PostingProfile = CustParameters::find().PostingProfile;
+            }
+            else if (offsetLine.AccountType == LedgerJournalACType::Vend && !offsetLine.PostingProfile)
+            {
+                offsetLine.PostingProfile = VendParameters::find().PostingProfile;
+            }
+
+            offsetLine.insert();
+
+            trans.OffsetAccountType      = LedgerJournalACType::Ledger;
+            trans.OffsetLedgerDimension  = 0;
+            trans.OffsetDefaultDimension = 0;
+            trans.update();
+        }
+
+        ttscommit;
     }
 
 ]]></Source>
@@ -3039,6 +3127,9 @@ public class PremBankRecMatchingEngine
         journalTrans.CurrencyCode       = 'INR';
         journalTrans.Txt                = strFmt("Self transfer via %1", _ifsc);
         journalTrans.insert();
+
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
 
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 
@@ -3312,6 +3403,9 @@ public class PremBankRecMatchingEngine
         journalTrans.DocumentNum    = _staging.ReferenceNo;
         journalTrans.insert();
 
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
+
         // Intentionally not posted - see the method comment.
         return journalTable.JournalNum;
     }
@@ -3384,6 +3478,9 @@ public class PremBankRecMatchingEngine
         journalTrans.DocumentNum        = _staging.ReferenceNo;
         journalTrans.insert();
 
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
+
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 
         return journalTable.JournalNum;
@@ -3436,6 +3533,9 @@ public class PremBankRecMatchingEngine
         journalTrans.CurrencyCode       = 'INR';
         journalTrans.Txt                = _narration;
         journalTrans.insert();
+
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
 
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 
@@ -3499,6 +3599,9 @@ public class PremBankRecMatchingEngine
             journalTrans.Txt             = strFmt("REVERSAL: %1", origTrans.Txt);
             journalTrans.insert();
         }
+
+        // One debit line and one credit line instead of an offset account on one line.
+        this.splitOffsetLines(journalTable);
 
         LedgerJournalCheckPost::newLedgerJournalTable(journalTable, NoYes::Yes).run();
 

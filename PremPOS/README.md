@@ -29,6 +29,7 @@ MobiKwik state ≠ Success, MobiKwik rows without payout batch, rows already imp
 | `AxClass\PremPOSReconciliation.xml` | Class | Header detection, CSV load, `processProviderRow`, zero-MSF terminals skipped in MSF journal, MSF journal limited to PineLabs rows, dialog accepts .xlsx/.csv |
 | `AxClass\PremBankRecMatchingEngine.xml` | Class | R02: UPI providers get one settlement voucher (`createUPISettlementJournal`, `addUPISettlementLine`); HDFC card settlement (`matchHdfcCardSettlement`, `createCardSettlementJournal`) |
 | (fix) `runPOSReconciliation` / `processMSFCharges` | | "Include POS reconciliation" now raises one PineLabs MSF+GST journal per unposted settlement date in the run's range, and stamps the rows MSF posted |
+| (change) `splitOffsetLines` | | Every bank rec journal is written as separate debit and credit lines instead of one line with an offset account |
 | `AxClass\PremBankRecHelper.xml` | Class | `upiAcquirerFromNarration`; PhonePe / MobiKwik NEFT credits classified as R02 |
 | `AxTable\PremPOSTerminalMap.xml` | Table | Field `CardSettlementBankAccount` (card clearing bank) + relation to BankAccountTable |
 | `AxForm\PremPOSTerminalMapForm.xml` | Form | `Card clearing bank account` on the Accounting group |
