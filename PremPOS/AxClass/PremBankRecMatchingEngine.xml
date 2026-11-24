@@ -1346,6 +1346,101 @@ public class PremBankRecMatchingEngine
 ]]></Source>
 			</Method>
 			<Method>
+				<Name>matchOutgoingByNameWindow</Name>
+				<Source><![CDATA[
+    // <summary>
+    // Outgoing payment by beneficiary name and amount within a date range before the
+    // statement date. Exactly one vendor or customer entry must fit; two or more go to
+    // the manual queue rather than being matched to an arbitrary one.
+    // </summary>
+    private boolean matchOutgoingByNameWindow(
+        PremBankStmtStaging _staging,
+        str                 _beneUpper,
+        TransDate           _fromDate,
+        TransDate           _toDate,
+        boolean             _allowSettled)
+    {
+        VendTrans   vendTrans;
+        VendTable   vendTable;
+        CustTrans   custTrans;
+        CustTable   custTable;
+        RefRecId    recId;
+        str         voucher, account, partyName;
+        boolean     isVendor;
+        int         found;
+
+        while select vendTrans
+            join vendTable
+            where vendTable.AccountNum == vendTrans.AccountNum
+               && (vendTrans.AmountCur == _staging.Amount
+                || vendTrans.AmountCur == -_staging.Amount)
+               && vendTrans.TransDate  >= _fromDate
+               && vendTrans.TransDate  <= _toDate
+        {
+            if (!_allowSettled && vendTrans.Closed != dateNull())
+            {
+                continue;
+            }
+
+            partyName = strUpr(vendTable.name());
+
+            if (strScan(partyName, _beneUpper, 1, strLen(partyName)) > 0)
+            {
+                found++;
+                recId    = vendTrans.RecId;
+                voucher  = vendTrans.Voucher;
+                account  = vendTrans.AccountNum;
+                isVendor = true;
+            }
+        }
+
+        while select custTrans
+            join custTable
+            where custTable.AccountNum == custTrans.AccountNum
+               && (custTrans.AmountCur == _staging.Amount
+                || custTrans.AmountCur == -_staging.Amount)
+               && custTrans.TransDate  >= _fromDate
+               && custTrans.TransDate  <= _toDate
+        {
+            if (!_allowSettled && custTrans.Closed != dateNull())
+            {
+                continue;
+            }
+
+            partyName = strUpr(custTable.name());
+
+            if (strScan(partyName, _beneUpper, 1, strLen(partyName)) > 0)
+            {
+                found++;
+                recId    = custTrans.RecId;
+                voucher  = custTrans.Voucher;
+                account  = custTrans.AccountNum;
+                isVendor = false;
+            }
+        }
+
+        if (found == 1)
+        {
+            this.reconcileMatch(_staging, recId,
+                strFmt("%1 NEFT match (entered before the bank date): %2 - voucher %3",
+                    isVendor ? "Vendor" : "Customer", account, voucher));
+            this.writeBackBankReference(_staging, voucher);
+            return true;
+        }
+
+        if (found > 1)
+        {
+            PremBankRecAuditLog::logEvent(_staging.RecId, "NEFT_NAME_AMBIGUOUS",
+                strFmt("%1 entries of %2 for %3 between %4 and %5 - sent to manual review",
+                    found, _staging.absAmount(), _beneUpper, _fromDate, _toDate));
+        }
+
+        return false;
+    }
+
+]]></Source>
+			</Method>
+			<Method>
 				<Name>matchByVendorCode</Name>
 				<Source><![CDATA[
     // <summary>
@@ -1732,8 +1827,17 @@ public class PremBankRecMatchingEngine
             }
         }
 
-        _staging.markManual(strFmt("Outgoing NEFT to %1 (Amt: %2) not matched",
-            beneName, _staging.Amount));
+        // A payment is often entered a day or two before the bank sends it - entered on
+        // 14-Nov, debited on 16-Nov. Nothing matched on the statement date, so the three
+        // days before it are tried, and only a single candidate is accepted.
+        if (this.matchOutgoingByNameWindow(_staging, beneUpper, txnDate - 3, txnDate - 1, allowSettled))
+        {
+            return;
+        }
+
+        _staging.markManual(strFmt("Outgoing NEFT to %1 (Amt: %2) not matched on %3 or the 3 days before%4",
+            beneName, _staging.Amount, txnDate,
+            allowSettled ? '' : " (settled payments are skipped - see Match settled payments)"));
         this.manualQueued++;
     }
 

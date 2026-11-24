@@ -1217,6 +1217,20 @@ public class PremBankRecHelper
 
         head = strUpr(strLRTrim(_description));
 
+        // An HDFC fund transfer to another HDFC account has one field fewer:
+        //
+        //     FT -  VKASRV-2141719360 -  14709020452 - SHANTI DEVI KUMAWAT
+        //
+        // type - remark - account - beneficiary, so the remark is the SECOND field.
+        if (strScan(head, 'FT ', 1, 3) == 1 || strScan(head, 'FT-', 1, 3) == 1)
+        {
+            len = strLen(_description);
+            p1  = strScan(_description, '-', 1, len);
+            p2  = p1 ? strScan(_description, sep, p1 + 1, len) : 0;
+
+            return p2 > 0 ? strLRTrim(subStr(_description, p1 + 1, p2 - (p1 + 1))) : '';
+        }
+
         if (strScan(head, 'NEFT', 1, 5) != 1
          && strScan(head, 'RTGS', 1, 5) != 1
          && strScan(head, 'IMPS', 1, 5) != 1)
