@@ -710,6 +710,16 @@ public class PremBankRecHelper
     {
         str lastSegment;
 
+        // HDFC third party transfer (same bank): "50200005917118-TPT-<remark>-<name>".
+        // No UTR in the narration and the bank reference is only 9 digits (284166462), so
+        // the reference is the key; the receipt carries its last 6 ("|RTGS/NEFT||166462||").
+        if (_referenceNo
+         && strLen(strKeep(_referenceNo, '0123456789')) >= 6
+         && strScan(strUpr(_description), '-TPT-', 1, strLen(_description)) > 0)
+        {
+            return _referenceNo;
+        }
+
         if (_referenceNo && strLen(_referenceNo) >= 10)
         {
             return _referenceNo;
